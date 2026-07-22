@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lili Market - Expendedora Virtual</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase SDKs (Compat para usar con Babel) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; }
+        .font-display { font-family: 'Orbitron', sans-serif; }
+        .vending-grid { background: repeating-linear-gradient(45deg, #1e293b, #1e293b 10px, #182234 10px, #182234 20px); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- CONFIGURACIÓN FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAlOxVzPhjz1fhz0n5NGroAj8H7w28SEz8",
+            authDomain: "markets-bc527.firebaseapp.com",
+            projectId: "markets-bc527",
+            storageBucket: "markets-bc527.firebasestorage.app",
+            messagingSenderId: "9908715735",
+            appId: "1:9908715735:web:ebe16ec9c64306184cb092"
+        };
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = app.firestore();
+
+        // --- UTILIDAD: COMPRESOR DE IMÁGENES ---
+        const compressImage = (file, callback) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const MAX_SIZE = 200;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                    } else {
+                        if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img,0, 0, width, height);
+                    callback(canvas.toDataURL('image/jpeg', 0.7));
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // --- COMPONENTE PRINCIPAL ---
+        function App() {
+            const [route, setRoute] = useState(window.location.hash);
+            const [products, setProducts] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                window.addEventListener('hashchange', () => setRoute(window.location.hash));
+                
+                // Suscripción en tiempo real a Firestore
+                const unsubProducts = db.collection('products').onSnapshot(snapshot => {
+                    const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setProducts(prods);
+                    setLoading(false);
+                });
+
+                // Si no hay productos en la BD, los inicializamos (Solo para la demo)
+                db.collection('products').get().then(snapshot => {
+                    if(snapshot.empty) {
+                        const initialData = [
+                            { code: "A1", name: "Coca Cola 1.5L", price: 7.00, img: "https://images.unsplash.com/photo-1554866585-cd94860890b7?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 10 },
+                            { code: "A2", name: "Inka Chips", price: 3.50, img: "https://images.unsplash.com/photo-1613919113640-25732ec5e61f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 15 },
+                            { code: "B1", name: "Galleta Oreo", price: 2.00, img: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 20 },
+                            { code: "B2", name: "Chocolate", price: 2.50, img: "https://images.unsplash.com/photo-1623660053975-cf75a8be0908?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 5 },
+                            { code: "C1", name: "Agua 500ml", price: 1.50, img: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 30 },
+                            { code: "C2", name: "Red Bull", price: 8.00, img: "https://images.unsplash.com/photo-1622597467836-f3285f2131b8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 8 }
+                        ];
+                        initialData.forEach(p => db.collection('products').add(p));
+                    }
+                });
+
+                return () => unsubProducts();
+            }, []);
+
+            const goAdmin = () => { window.location.hash = '#admin'; setRoute('#admin'); };
+            const goClient = () => { window.location.hash = ''; setRoute(''); };
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center text-green-400 font-display">CARGANDO MÁQUINA...</div>;
+
+            if (route === '#admin') {
+                return <AdminApp onBackClick={goClient} products={products} />;
+            }
+            return <ClientApp onAdminClick={goAdmin} products={products} />;
+        }
+
+        // --- VISTA DEL CLIENTE ---
+        function ClientApp({ onAdminClick, products }) {
+            const [cart, setCart] = useState([]);
+            const [view, setView] = useState('home');
+            const [location, setLocation] = useState('');
+            const [receipt, setReceipt] = useState(null);
+            const [error, setError] = useState('');
+            const [loadingOrder, setLoadingOrder] = useState(false);
+
+            const availableProducts = products.filter(p => p.stock > 0);
+
+            const addToCart = (product) => {
+                const existing = cart.find(item => item.id === product.id);
+                if (existing && existing.qty >= product.stock) return;
+                if (existing) {
+                    setCart(cart.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item));
+                } else {
+                    setCart([...cart, { ...product, qty: 1 }]);
+                }
+            };
+
+            const decreaseQty = (id) => {
+                const existing = cart.find(item => item.id === id);
+                if (existing.qty === 1) setCart(cart.filter(item => item.id !== id));
+                else setCart(cart.map(item => item.id === id ? { ...item, qty: item.qty - 1 } : item));
+            };
+
+            const removeItem = (id) => setCart(cart.filter(item => item.id !== id));
+            const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+            const totalPrice = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+
+            const handleReceiptFile = (e) => {
+                const file = e.target.files[0];
+                if(file) compressImage(file, (src) => setReceipt(src));
+            };
+
+            const confirmOrder = async () => {
+                setError('');
+                if(!location || !receipt) {
+                    setError("⚠️ Falta subir el comprobante de Yape o indicar la ubicación de entrega.");
+                    return;
+                }
+                
+                setLoadingOrder(true);
+
+                try {
+                    // 1. Guardar pedido en Firestore
+                    await db.collection('orders').add({
+                        client: "Cliente Oficina",
+                        items: cart.map(p => `${p.name} (x${p.qty})`).join(", "),
+                        total: totalPrice,
+                        status: "Recibido",
+                        location: location,
+                        receipt: receipt,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // 2. Descontar stock en Firestore
+                    const batch = db.batch();
+                    cart.forEach(item => {
+                        const productRef = db.collection('products').doc(item.id);
+                        const newStock = item.stock - item.qty;
+                        batch.update(productRef, { stock: newStock });
+                    });
+                    await batch.commit();
+                    
+                    // 3. Limpiar estado y cambiar de pantalla
+                    setCart([]); setLocation(''); setReceipt(null);
+                    setView('success');
+                } catch (err) {
+                    console.error(err);
+                    setError("❌ Error al guardar el pedido. Intenta nuevamente.");
+                } finally {
+                    setLoadingOrder(false);
+                }
+            };
+
+            if(view === 'success') {
+                return (
+                    <div className="max-w-md mx-auto p-8 text-center bg-slate-900 min-h-screen flex flex-col justify-center">
+                        <h2 className="text-3xl font-display font-bold text-green-400 mb-4">¡DESPACHADO! 🛒</h2>
+                        <p className="text-slate-300 mb-8">Lili Market recibió tu pedido y lo está preparando. Tu repartidor va hacia tu posición pronto.</p>
+                        <button onClick={() => setView('home')} className="bg-green-500 text-slate-900 py-3 px-8 rounded-xl font-bold hover:bg-green-400">Volver a la Máquina</button>
+                        <button onClick={onAdminClick} className="mt-4 text-sm text-slate-500 underline">Ver Panel Admin</button>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-md mx-auto bg-slate-800 min-h-screen relative pb-28 border-x border-slate-700">
+                    <header className="p-4 flex justify-between items-center bg-black border-b-4 border-green-500 sticky top-0 z-20">
+                        <div>
+                            <h1 className="text-xl font-display font-bold tracking-wider text-green-400">LILI MARKET</h1>
+                            <p className="text-[10px] text-slate-500 tracking-widest">MAQUINA EXPENDEDORA 24/7</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button onClick={onAdminClick} className="text-slate-600 text-xs hover:text-slate-400">⚙️ Admin</button>
+                            <div className="bg-green-900/40 border border-green-500 px-3 py-1 rounded-lg flex items-center gap-2">
+                                <span className="text-green-400 text-sm font-bold">🛒 {totalQty}</span>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="p-4 vending-grid min-h-[calc(100vh-100px)]">
+                        {availableProducts.length === 0 ? (
+                            <div className="text-center text-slate-500 mt-20 font-display">MÁQUINA VACÍA</div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-4">
+                                {availableProducts.map(p => {
+                                    const itemInCart = cart.find(item => item.id === p.id);
+                                    return (
+                                        <div key={p.id} className={`bg-slate-700 rounded-xl overflow-hidden border-2 ${itemInCart ? 'border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]' : 'border-slate-600'}`}>
+                                            <div className="relative">
+                                                <img src={p.img} alt={p.name} className="w-full h-24 object-cover" />
+                                                <span className="absolute top-1 left-1 bg-black/70 text-green-400 text-[10px] font-display px-1.5 py-0.5 rounded">{p.code}</span>
+                                            </div>
+                                            <div className="p-2">
+                                                <h3 className="font-bold text-xs text-white h-8 overflow-hidden">{p.name}</h3>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <span className="text-green-400 font-display font-bold text-sm">S/ {p.price.toFixed(2)}</span>
+                                                </div>
+                                                
+                                                {itemInCart ? (
+                                                    <div className="flex items-center justify-between mt-2 bg-black/30 rounded-lg p-1">
+                                                        <button onClick={() => decreaseQty(p.id)} disabled={loadingOrder} className="text-white bg-red-500 w-6 h-6 rounded font-bold flex items-center justify-center disabled:opacity-30">-</button>
+                                                        <span className="text-white font-bold text-sm">{itemInCart.qty}</span>
+                                                        <button onClick={() => addToCart(p)} disabled={itemInCart.qty >= p.stock || loadingOrder} className="text-white bg-green-500 w-6 h-6 rounded font-bold flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed">+</button>
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={() => addToCart(p)} disabled={loadingOrder} className="w-full mt-2 bg-slate-900 text-green-400 text-xs py-1.5 rounded-lg font-bold border border-green-500/30 hover:bg-slate-950 disabled:opacity-30">
+                                                        + Agregar
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {view === 'checkout' && (
+                        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-end justify-center z-50">
+                            <div className="bg-slate-800 w-full max-w-md rounded-t-2xl p-6 max-h-[90vh] overflow-y-auto border-t-2 border-green-500">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xl font-display font-bold text-green-400">TU CARRITO</h2>
+                                    <button onClick={() => setView('home')} className="text-slate-400 text-2xl">&times;</button>
+                                </div>
+                                
+                                <div className="bg-black/30 rounded-xl p-3 mb-4 border border-slate-700">
+                                    {cart.length === 0 ? (
+                                        <p className="text-slate-500 text-center text-sm py-4">Carrito vacío</p>
+                                    ) : (
+                                        cart.map((item) => (
+                                            <div key={item.id} className="flex items-center gap-2 py-2 border-b border-slate-700 last:border-0">
+                                                <img src={item.img} className="w-10 h-10 rounded object-cover" alt={item.name} />
+                                                <div className="flex-1">
+                                                    <p className="text-white text-sm font-semibold">{item.name}</p>
+                                                    <p className="text-green-400 text-xs">S/ {item.price.toFixed(2)} c/u</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 bg-slate-900 rounded-lg p-1">
+                                                    <button onClick={() => decreaseQty(item.id)} disabled={loadingOrder} className="text-white bg-red-500 w-5 h-5 rounded text-xs font-bold flex items-center justify-center disabled:opacity-30">-</button>
+                                                    <span className="text-white text-sm font-bold">{item.qty}</span>
+                                                    <button onClick={() => addToCart(item)} disabled={item.qty >= item.stock || loadingOrder} className="text-white bg-green-500 w-5 h-5 rounded text-xs font-bold flex items-center justify-center disabled:opacity-30">+</button>
+                                                </div>
+                                                <button onClick={() => removeItem(item.id)} disabled={loadingOrder} className="text-red-400 hover:text-red-300 ml-1 disabled:opacity-30">🗑️</button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {cart.length > 0 && (
+                                    <>
+                                        <div className="flex justify-between font-display font-bold text-green-400 mb-4 text-lg">
+                                            <span>TOTAL</span>
+                                            <span>S/ {totalPrice.toFixed(2)}</span>
+                                        </div>
+
+                                        {error && <div className="bg-red-900/50 border border-red-500 text-red-300 text-sm p-2 rounded mb-4">{error}</div>}
+
+                                        <div className="mb-4">
+                                            <label className="block text-xs font-bold text-slate-400 mb-1">1. Paga a este Yape</label>
+                                            <div className="bg-slate-900 p-3 rounded-xl flex flex-col items-center border border-slate-700">
+                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=LiliYape123" alt="QR Yape" className="w-24 h-24 mb-1 rounded" />
+                                            </div>
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="block text-xs font-bold text-slate-400 mb-1">2. Sube tu comprobante</label>
+                                            <input type="file" accept="image/*" onChange={handleReceiptFile} className="w-full text-sm p-2 bg-slate-900 rounded-lg border border-slate-700 text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-green-900/50 file:text-green-400" />
+                                            {receipt && <img src={receipt} className="w-16 h-16 object-cover mt-2 rounded-md" alt="Comprobante" />}
+                                        </div>
+                                        <div className="mb-6">
+                                            <label className="block text-xs font-bold text-slate-400 mb-1">3. ¿A qué posición llevamos el pedido?</label>
+                                            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ej: Piso 3, puesto 15" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
+                                        </div>
+                                        <button onClick={confirmOrder} disabled={loadingOrder} className="w-full bg-green-500 text-slate-900 py-3 rounded-xl font-display font-bold text-md hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            {loadingOrder ? 'Procesando...' : 'CONFIRMAR PEDIDO'}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {cart.length > 0 && view !== 'checkout' && (
+                        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-3 bg-black/90 backdrop-blur border-t border-green-500/30">
+                            <button onClick={() => setView('checkout')} className="w-full bg-green-500 text-slate-900 py-3 rounded-xl font-display font-bold text-md flex justify-center items-center hover:bg-green-400">
+                                PAGAR AHORA (S/ {totalPrice.toFixed(2)})
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- VISTA ADMIN ---
+        function AdminApp({ onBackClick, products }) {
+            const [orders, setOrders] = useState([]);
+            const [tab, setTab] = useState('pedidos');
+
+            useEffect(() => {
+                const unsubOrders = db.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                });
+                return () => unsubOrders();
+            }, []);
+
+            const updateOrderStatus = async (id, status) => {
+                await db.collection('orders').doc(id).update({ status });
+            };
+
+            const addNewProduct = async () => {
+                await db.collection('products').add({
+                    code: "N" + Math.floor(Math.random() * 100),
+                    name: "Nuevo Producto",
+                    price: 1.00,
+                    img: "https://via.placeholder.com/150x150/1e293b/ffffff?text=Foto",
+                    stock: 0
+                });
+            };
+
+            const updateProductField = async (id, field, value) => {
+                await db.collection('products').doc(id).update({ [field]: value });
+            };
+
+            const deleteProduct = async (id) => {
+                if(confirm("¿Eliminar este producto de la máquina?")) {
+                    await db.collection('products').doc(id).delete();
+                }
+            };
+
+            const handleProductImage = (id, e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    compressImage(file, (src) => updateProductField(id, 'img', src));
+                }
+            };
+
+            const totalSales = orders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
+            const yourCommission = totalSales * 0.05;
+
+            return (
+                <div className="min-h-screen bg-slate-900 font-inter p-4">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                            <div>
+                                <h2 className="text-xl font-display font-bold text-green-400">LILI MARKET - ADMIN</h2>
+                                <p className="text-sm text-slate-500">Control de Pedidos y Ventas (En tiempo real)</p>
+                            </div>
+                            <button onClick={onBackClick} className="text-sm text-slate-400 hover:text-white border border-slate-700 px-3 py-1 rounded">← Volver</button>
+                        </div>
+
+                        <div className="flex gap-2 mb-6">
+                            <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
+                        </div>
+
+                        {tab === 'pedidos' && (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                        <p className="text-slate-400 text-xs">Ventas Entregadas</p>
+                                        <p className="text-xl font-bold text-white">S/ {totalSales.toFixed(2)}</p>
+                                    </div>
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                        <p className="text-slate-400 text-xs">Comisión de la plataforma (5%)</p>
+                                        <p className="text-xl font-bold text-green-400">S/ {yourCommission.toFixed(2)}</p>
+                                    </div>
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                        <p className="text-slate-400 text-xs">Pedidos Pendientes</p>
+                                        <p className="text-xl font-bold text-yellow-400">{orders.filter(o => o.status !== "Entregado").length}</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {orders.length === 0 ? (
+                                        <div className="bg-slate-800 p-8 rounded-xl text-center text-slate-500">No hay pedidos.</div>
+                                    ) : (
+                                        orders.map(order => (
+                                            <div key={order.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-bold text-white text-sm">{order.items}</p>
+                                                    <p className="text-sm text-green-400 font-semibold mb-2">Total: S/ {order.total.toFixed(2)}</p>
+                                                    <p className="text-xs text-slate-400">📍 Entregar en: <span className="font-bold text-slate-200">{order.location}</span></p>
+                                                    <a href={order.receipt} target="_blank" className="inline-block mt-2 text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">Ver Comprobante</a>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className={`block px-3 py-1 rounded-full text-xs font-bold mb-2 ${order.status === 'Recibido' ? 'bg-yellow-900/50 text-yellow-400' : order.status === 'En Camino' ? 'bg-blue-900/50 text-blue-400' : 'bg-green-900/50 text-green-400'}`}>{order.status}</span>
+                                                    {order.status === 'Recibido' && <button onClick={() => updateOrderStatus(order.id, 'En Camino')} className="text-xs bg-blue-500 text-white px-3 py-1 rounded font-bold w-full mb-1">Despachar</button>}
+                                                    {order.status === 'En Camino' && <button onClick={() => updateOrderStatus(order.id, 'Entregado')} className="text-xs bg-green-500 text-slate-900 px-3 py-1 rounded font-bold w-full">Entregado</button>}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {tab === 'productos' && (
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold text-white">Inventario Máquina</h3>
+                                    <button onClick={addNewProduct} className="bg-green-500 text-slate-900 px-3 py-1.5 rounded-lg text-sm font-bold">+ Agregar Producto</button>
+                                </div>
+                                
+                                <div className="space-y-4">
+                                    {products.map(p => (
+                                        <div key={p.id} className="bg-slate-900 p-3 rounded-lg flex flex-col md:flex-row gap-3 items-start md:items-center border border-slate-700">
+                                            <div className="flex flex-col items-center gap-1">
+                                                <img src={p.img} className="w-16 h-16 rounded object-cover bg-slate-800" alt={p.name} />
+                                                <label className="text-[10px] text-green-400 cursor-pointer hover:underline mt-1">
+                                                    Cambiar Foto
+                                                    <input type="file" accept="image/*" onChange={(e) => handleProductImage(p.id, e)} className="hidden" />
+                                                </label>
+                                            </div>
+                                            <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block">Nombre</label>
+                                                    <input type="text" value={p.name} onChange={(e) => updateProductField(p.id, 'name', e.target.value)} className="w-full bg-slate-800 text-white text-sm p-1.5 rounded border border-slate-700" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 block">Precio (S/)</label>
+                                                    <input type="number" step="0.10" value={p.price} onChange={(e) => updateProductField(p.id, 'price', parseFloat(e.target.value) || 0)} className="w-full bg-slate-800 text-white text-sm p-1.5 rounded border border-slate-700" />
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
+                                                <button onClick={() => updateProductField(p.id, 'stock', p.stock - 1)} className="text-white bg-red-500 w-6 h-6 rounded font-bold text-xs">-</button>
+                                                <div className="text-center">
+                                                    <span className="text-[10px] text-slate-500 block">Stock</span>
+                                                    <span className="text-white font-bold text-sm">{p.stock}</span>
+                                                </div>
+                                                <button onClick={() => updateProductField(p.id, 'stock', p.stock + 1)} className="text-white bg-green-500 w-6 h-6 rounded font-bold text-xs">+</button>
+                                            </div>
+                                            <button onClick={() => deleteProduct(p.id)} className="text-red-400 hover:text-red-300 text-xl px-2">🗑️</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
