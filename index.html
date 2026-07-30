@@ -36,7 +36,7 @@
         const db = app.firestore();
 
         const TELEGRAM_BOT_TOKEN = "8611530071:AAFYIVriMU6VQwZCIOFp2xSya_VSFczNHok";
-        const TELEGRAM_CHAT_ID = "-1004318541160"; // ID corregido del supergroup
+        const TELEGRAM_CHAT_ID = "-1004318541160";
         const ADMIN_PASSWORD = "lili2024";
         const SUPERADMIN_PASSWORD = "superadmin";
         const SUPERADMIN_YAPE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SuperadminYape"; // Reemplaza por tu QR real
@@ -339,8 +339,8 @@
             const [pass, setPass] = useState('');
             const [error, setError] = useState('');
             const [modalReceipt, setModalReceipt] = useState(null);
+            const [searchTerm, setSearchTerm] = useState(''); // Estado para el filtro
 
-            // Estado para pagos
             const [commReceipt, setCommReceipt] = useState(null);
             const [commRef, setCommRef] = useState('');
             const [commError, setCommError] = useState('');
@@ -423,10 +423,19 @@
                 );
             }
 
-            // Cálculos del Ciclo Actual (Deuda)
             const cycleOrders = orders.filter(o => o.createdAt >= billingCycle);
             const totalSalesCycle = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const yourCommission = totalSalesCycle * 0.05;
+
+            // Lógica de Filtro
+            const filteredOrders = orders.filter(o => {
+                const term = searchTerm.toLowerCase();
+                return o.client.toLowerCase().includes(term) || 
+                       o.items.toLowerCase().includes(term) || 
+                       o.location.toLowerCase().includes(term) ||
+                       o.status.toLowerCase().includes(term) ||
+                       new Date(o.createdAt).toLocaleString().includes(term);
+            });
 
             return (
                 <div className="min-h-screen bg-slate-900 font-inter p-4">
@@ -466,15 +475,25 @@
                                         <button onClick={downloadCSV} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold w-full">📄 Descargar Excel (CSV)</button>
                                     </div>
                                 </div>
+
+                                <input 
+                                    type="text" 
+                                    placeholder="🔍 Buscar por cliente, producto, fecha, estado..." 
+                                    value={searchTerm} 
+                                    onChange={(e) => setSearchTerm(e.target.value)} 
+                                    className="w-full p-2 rounded-lg border border-slate-700 bg-slate-800 text-white text-sm mb-4 focus:outline-none focus:border-green-500"
+                                />
+
                                 <div className="space-y-3">
-                                    {orders.length === 0 ? ( <div className="bg-slate-800 p-8 rounded-xl text-center text-slate-500">No hay pedidos.</div> ) : (
-                                        orders.map(order => (
+                                    {filteredOrders.length === 0 ? ( <div className="bg-slate-800 p-8 rounded-xl text-center text-slate-500">No se encontraron pedidos.</div> ) : (
+                                        filteredOrders.map(order => (
                                             <div key={order.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm flex justify-between items-start">
                                                 <div>
                                                     <p className="font-bold text-white text-sm">👤 {order.client}</p>
                                                     <p className="text-white text-sm">{order.items}</p>
                                                     <p className="text-sm text-green-400 font-semibold mb-2">Total: S/ {order.total.toFixed(2)}</p>
                                                     <p className="text-xs text-slate-400">📍 {order.location}</p>
+                                                    <p className="text-xs text-slate-500 mt-1">🕒 {new Date(order.createdAt).toLocaleString()}</p>
                                                     <button onClick={() => setModalReceipt(order.receipt)} className="inline-block mt-2 text-xs bg-slate-700 text-green-400 px-2 py-1 rounded hover:bg-slate-600">👁️ Ver Comprobante</button>
                                                 </div>
                                                 <div className="text-right">
@@ -587,6 +606,7 @@
             const [payments, setPayments] = useState([]);
             const [tab, setTab] = useState('dashboard');
             const [modalReceipt, setModalReceipt] = useState(null);
+            const [searchTerm, setSearchTerm] = useState(''); // Estado para el filtro
 
             useEffect(() => {
                 if (auth) {
@@ -637,6 +657,16 @@
             const cycleSales = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const cycleCommission = cycleSales * 0.05;
 
+            // Lógica de Filtro
+            const filteredOrders = orders.filter(o => {
+                const term = searchTerm.toLowerCase();
+                return o.client.toLowerCase().includes(term) || 
+                       o.items.toLowerCase().includes(term) || 
+                       o.location.toLowerCase().includes(term) ||
+                       o.status.toLowerCase().includes(term) ||
+                       new Date(o.createdAt).toLocaleString().includes(term);
+            });
+
             return (
                 <div className="min-h-screen bg-black font-inter p-4 text-white relative">
                     {modalReceipt && (
@@ -675,20 +705,30 @@
                                     </div>
                                 </div>
 
+                                <input 
+                                    type="text" 
+                                    placeholder="🔍 Buscar en todo el historial..." 
+                                    value={searchTerm} 
+                                    onChange={(e) => setSearchTerm(e.target.value)} 
+                                    className="w-full p-2 rounded-lg border border-slate-800 bg-slate-950 text-white text-sm mb-4 focus:outline-none focus:border-red-500"
+                                />
+
                                 <h3 className="text-lg font-bold mb-4">Historial de Pedidos (Global)</h3>
                                 <div className="space-y-2">
-                                    {orders.map(order => (
-                                        <div key={order.id} className="bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border border-slate-800">
-                                            <div>
-                                                <span className="text-white font-bold">{order.client}</span> - {order.items}
-                                                <p className="text-slate-500 text-xs">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                    {filteredOrders.length === 0 ? <div className="bg-slate-900 p-4 rounded-xl text-slate-500 text-center">No se encontraron pedidos.</div> : (
+                                        filteredOrders.map(order => (
+                                            <div key={order.id} className="bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border border-slate-800">
+                                                <div>
+                                                    <span className="text-white font-bold">{order.client}</span> - {order.items}
+                                                    <p className="text-slate-500 text-xs">🕒 {new Date(order.createdAt).toLocaleString()}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-green-400 font-bold">S/ {order.total.toFixed(2)}</p>
+                                                    <span className="text-slate-400 text-xs">{order.status}</span>
+                                                </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-green-400 font-bold">S/ {order.total.toFixed(2)}</p>
-                                                <span className="text-slate-400 text-xs">{order.status}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </>
                         )}
