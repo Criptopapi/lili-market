@@ -229,7 +229,7 @@
                                     return (
                                         <div key={p.id} className={`bg-slate-700 rounded-xl overflow-hidden border-2 ${itemInCart ? 'border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]' : 'border-slate-600'}`}>
                                             <div className="relative">
-                                                <img src={p.img} alt={p.name} className="w-full h-24 object-cover" />
+                                                <img src={p.img} alt={p.name} className="w-full aspect-square object-cover" />
                                                 <span className="absolute top-1 left-1 bg-black/70 text-green-400 text-[10px] font-display px-1.5 py-0.5 rounded">{p.code}</span>
                                             </div>
                                             <div className="p-2">
