@@ -23,7 +23,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- CONFIGURACIÓN FIREBASE ---
+        // --- CONFIGURACIÓN ---
         const firebaseConfig = {
             apiKey: "AIzaSyAlOxVzPhjz1fhz0n5NGroAj8H7w28SEz8",
             authDomain: "markets-bc527.firebaseapp.com",
@@ -35,11 +35,11 @@
         const app = firebase.initializeApp(firebaseConfig);
         const db = app.firestore();
 
-        // --- CONFIGURACIÓN TELEGRAM ---
         const TELEGRAM_BOT_TOKEN = "8611530071:AAFYIVriMU6VQwZCIOFp2xSya_VSFczNHok";
-        const TELEGRAM_CHAT_ID = "-1004318541160";
+        const TELEGRAM_CHAT_ID = "-1004318541160"; // ID corregido del supergroup
         const ADMIN_PASSWORD = "lili2024";
         const SUPERADMIN_PASSWORD = "superadmin";
+        const SUPERADMIN_YAPE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SuperadminYape"; // Reemplaza por tu QR real
 
         // --- UTILIDADES ---
         const compressImage = (file, callback) => {
@@ -115,7 +115,7 @@
 
             if (loading) return <div className="min-h-screen flex items-center justify-center text-green-400 font-display">CARGANDO MÁQUINA...</div>;
 
-            if (route === '#superadmin') return <SuperAdminApp onBackClick={goClient} billingCycle={billingCycle} setBillingCycle={setBillingCycle} />;
+            if (route === '#superadmin') return <SuperAdminApp onBackClick={goClient} billingCycle={billingCycle} />;
             if (route === '#admin') return <AdminApp onBackClick={goClient} products={products} billingCycle={billingCycle} />;
             
             return <ClientApp onAdminClick={goAdmin} products={products} />;
@@ -333,18 +333,27 @@
         // --- VISTA ADMIN (LILI) ---
         function AdminApp({ onBackClick, products, billingCycle }) {
             const [orders, setOrders] = useState([]);
+            const [payments, setPayments] = useState([]);
             const [tab, setTab] = useState('pedidos');
             const [auth, setAuth] = useState(false);
             const [pass, setPass] = useState('');
             const [error, setError] = useState('');
             const [modalReceipt, setModalReceipt] = useState(null);
 
+            // Estado para pagos
+            const [commReceipt, setCommReceipt] = useState(null);
+            const [commRef, setCommRef] = useState('');
+            const [commError, setCommError] = useState('');
+
             useEffect(() => {
                 if (auth) {
-                    const unsub = db.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    const unsubOrders = db.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
                         setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     });
-                    return () => unsub();
+                    const unsubPayments = db.collection('commission_payments').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                        setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    });
+                    return () => { unsubOrders(); unsubPayments(); };
                 }
             }, [auth]);
 
@@ -363,6 +372,43 @@
                 if (file) compressImage(file, (src) => updateProductField(id, 'img', src));
             };
 
+            const handleCommFile = (e) => {
+                const file = e.target.files[0];
+                if(file) compressImage(file, (src) => setCommReceipt(src));
+            };
+
+            const submitPayment = async (e) => {
+                e.preventDefault();
+                if(!commReceipt || !commRef) { setCommError("Sube el comprobante y pon una referencia."); return; }
+                try {
+                    await db.collection('commission_payments').add({
+                        receipt: commReceipt,
+                        reference: commRef,
+                        status: "Pendiente",
+                        createdAt: Date.now()
+                    });
+                    setCommReceipt(null); setCommRef(''); setCommError('');
+                    alert("Comprobante enviado al administrador de la plataforma.");
+                } catch(err) { console.error(err); setCommError("Error al subir."); }
+            };
+
+            const downloadCSV = () => {
+                let csv = "Fecha,Cliente,Ubicacion,Pedido,Total,Estado\n";
+                orders.forEach(o => {
+                    const date = new Date(o.createdAt).toLocaleString();
+                    csv += `"${date}","${o.client}","${o.location}","${o.items}",${o.total.toFixed(2)},"${o.status}"\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "pedidos_lili_market.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
             if (!auth) {
                 return (
                     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
@@ -377,6 +423,7 @@
                 );
             }
 
+            // Cálculos del Ciclo Actual (Deuda)
             const cycleOrders = orders.filter(o => o.createdAt >= billingCycle);
             const totalSalesCycle = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const yourCommission = totalSalesCycle * 0.05;
@@ -398,9 +445,10 @@
                             <button onClick={onBackClick} className="text-sm text-slate-400 hover:text-white border border-slate-700 px-3 py-1 rounded">← Volver</button>
                         </div>
 
-                        <div className="flex gap-2 mb-6">
-                            <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
-                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
+                        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                            <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
+                            <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
                         </div>
 
                         {tab === 'pedidos' && (
@@ -414,14 +462,13 @@
                                         <p className="text-slate-400 text-xs">Comisión Plataforma (5%)</p>
                                         <p className="text-xl font-bold text-green-400">S/ {yourCommission.toFixed(2)}</p>
                                     </div>
-                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                        <p className="text-slate-400 text-xs">Pedidos Pendientes</p>
-                                        <p className="text-xl font-bold text-yellow-400">{cycleOrders.filter(o => o.status !== "Entregado").length}</p>
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-center">
+                                        <button onClick={downloadCSV} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold w-full">📄 Descargar Excel (CSV)</button>
                                     </div>
                                 </div>
                                 <div className="space-y-3">
-                                    {cycleOrders.length === 0 ? ( <div className="bg-slate-800 p-8 rounded-xl text-center text-slate-500">No hay pedidos en este ciclo.</div> ) : (
-                                        cycleOrders.map(order => (
+                                    {orders.length === 0 ? ( <div className="bg-slate-800 p-8 rounded-xl text-center text-slate-500">No hay pedidos.</div> ) : (
+                                        orders.map(order => (
                                             <div key={order.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm flex justify-between items-start">
                                                 <div>
                                                     <p className="font-bold text-white text-sm">👤 {order.client}</p>
@@ -482,6 +529,51 @@
                                 </div>
                             </div>
                         )}
+
+                        {tab === 'pagos' && (
+                            <div>
+                                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
+                                    <h3 className="text-lg font-bold text-white mb-4">Pagar Comisión de Plataforma</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="flex flex-col items-center justify-center bg-slate-900 p-4 rounded-lg">
+                                            <img src={SUPERADMIN_YAPE_QR} alt="QR Superadmin" className="w-32 h-32 mb-2 rounded" />
+                                            <p className="text-sm text-slate-400 text-center">Escanea y paga la comisión del ciclo actual (S/ {yourCommission.toFixed(2)})</p>
+                                        </div>
+                                        <form onSubmit={submitPayment} className="flex flex-col gap-2">
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">1. Sube el comprobante</label>
+                                                <input type="file" accept="image/*" onChange={handleCommFile} className="w-full text-sm p-2 bg-slate-900 rounded-lg border border-slate-700 text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-green-900/50 file:text-green-400" />
+                                                {commReceipt && <img src={commReceipt} className="w-20 h-20 object-cover mt-2 rounded-md" alt="Comprobante" />}
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">2. Referencia (Fecha o N° Operación)</label>
+                                                <input type="text" value={commRef} onChange={(e) => setCommRef(e.target.value)} placeholder="Ej: 12-04-2024" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
+                                            </div>
+                                            {commError && <p className="text-red-400 text-sm">{commError}</p>}
+                                            <button type="submit" className="bg-green-500 text-slate-900 py-2 rounded-lg font-bold mt-2">Enviar Comprobante</button>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <h3 className="text-lg font-bold text-white mb-4">Historial de Pagos</h3>
+                                <div className="space-y-3">
+                                    {payments.length === 0 ? <div className="bg-slate-800 p-4 rounded-xl text-slate-500 text-center">No hay pagos registrados.</div> : (
+                                        payments.map(pay => (
+                                            <div key={pay.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
+                                                <div>
+                                                    <p className="text-white text-sm font-semibold">Ref: {pay.reference}</p>
+                                                    <p className="text-slate-400 text-xs">{new Date(pay.createdAt).toLocaleString()}</p>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${pay.status === 'Pendiente' ? 'bg-yellow-900/50 text-yellow-400' : 'bg-green-900/50 text-green-400'}`}>{pay.status}</span>
+                                                    <button onClick={() => setModalReceipt(pay.receipt)} className="text-xs bg-slate-700 text-blue-400 px-2 py-1 rounded hover:bg-slate-600">👁️ Ver</button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -492,13 +584,19 @@
             const [auth, setAuth] = useState(false);
             const [pass, setPass] = useState('');
             const [orders, setOrders] = useState([]);
+            const [payments, setPayments] = useState([]);
+            const [tab, setTab] = useState('dashboard');
+            const [modalReceipt, setModalReceipt] = useState(null);
 
             useEffect(() => {
                 if (auth) {
-                    const unsub = db.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                    const unsubOrders = db.collection('orders').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
                         setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     });
-                    return () => unsub();
+                    const unsubPayments = db.collection('commission_payments').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+                        setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    });
+                    return () => { unsubOrders(); unsubPayments(); };
                 }
             }, [auth]);
 
@@ -513,6 +611,10 @@
                     await db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
                     alert("Ciclo reiniciado. El contador de comisiones de Lili volvió a cero.");
                 }
+            };
+
+            const approvePayment = async (id) => {
+                await db.collection('commission_payments').doc(id).update({ status: "Aprobado" });
             };
 
             if (!auth) {
@@ -536,7 +638,13 @@
             const cycleCommission = cycleSales * 0.05;
 
             return (
-                <div className="min-h-screen bg-black font-inter p-4 text-white">
+                <div className="min-h-screen bg-black font-inter p-4 text-white relative">
+                    {modalReceipt && (
+                        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4" onClick={() => setModalReceipt(null)}>
+                            <img src={modalReceipt} className="max-w-full max-h-full rounded-lg" alt="Comprobante" />
+                            <button className="absolute top-4 right-4 text-white text-4xl">&times;</button>
+                        </div>
+                    )}
                     <div className="max-w-4xl mx-auto">
                         <div className="flex justify-between items-center mb-6 border-b border-red-500 pb-4">
                             <div>
@@ -546,35 +654,72 @@
                             <button onClick={onBackClick} className="text-sm text-slate-400 hover:text-white border border-slate-700 px-3 py-1 rounded">← Salir</button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                <p className="text-slate-400 text-xs">Total Histórico (Plataforma)</p>
-                                <p className="text-2xl font-bold text-white">S/ {totalSalesAllTime.toFixed(2)}</p>
-                                <p className="text-green-400 text-sm">Comisión Total: S/ {totalCommissionAllTime.toFixed(2)}</p>
-                            </div>
-                            <div className="bg-slate-900 p-4 rounded-xl border border-red-500">
-                                <p className="text-slate-400 text-xs">Ciclo Actual (Pendiente de Pago)</p>
-                                <p className="text-2xl font-bold text-white">S/ {cycleSales.toFixed(2)}</p>
-                                <p className="text-red-400 text-sm">Comisión a Cobrar: S/ {cycleCommission.toFixed(2)}</p>
-                                <button onClick={resetBillingCycle} className="mt-2 w-full bg-red-500 text-white py-2 rounded font-bold text-sm hover:bg-red-600">VALIDAR PAGO Y RESETEAR CICLO</button>
-                            </div>
+                        <div className="flex gap-2 mb-6">
+                            <button onClick={() => setTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'dashboard' ? 'bg-red-500 text-white' : 'bg-slate-900 text-slate-400'}`}>Resumen</button>
+                            <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'pagos' ? 'bg-red-500 text-white' : 'bg-slate-900 text-slate-400'}`}>Aprobación de Pagos</button>
                         </div>
 
-                        <h3 className="text-lg font-bold mb-4">Historial de Pedidos</h3>
-                        <div className="space-y-2">
-                            {orders.map(order => (
-                                <div key={order.id} className="bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border border-slate-800">
-                                    <div>
-                                        <span className="text-white font-bold">{order.client}</span> - {order.items}
-                                        <p className="text-slate-500 text-xs">{new Date(order.createdAt).toLocaleDateString()}</p>
+                        {tab === 'dashboard' && (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <p className="text-slate-400 text-xs">Total Histórico (Plataforma)</p>
+                                        <p className="text-2xl font-bold text-white">S/ {totalSalesAllTime.toFixed(2)}</p>
+                                        <p className="text-green-400 text-sm">Comisión Total: S/ {totalCommissionAllTime.toFixed(2)}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-green-400 font-bold">S/ {order.total.toFixed(2)}</p>
-                                        <span className="text-slate-400 text-xs">{order.status}</span>
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-red-500">
+                                        <p className="text-slate-400 text-xs">Ciclo Actual (Pendiente de Pago)</p>
+                                        <p className="text-2xl font-bold text-white">S/ {cycleSales.toFixed(2)}</p>
+                                        <p className="text-red-400 text-sm">Comisión a Cobrar: S/ {cycleCommission.toFixed(2)}</p>
+                                        <button onClick={resetBillingCycle} className="mt-2 w-full bg-red-500 text-white py-2 rounded font-bold text-sm hover:bg-red-600">VALIDAR PAGO Y RESETEAR CICLO</button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+
+                                <h3 className="text-lg font-bold mb-4">Historial de Pedidos (Global)</h3>
+                                <div className="space-y-2">
+                                    {orders.map(order => (
+                                        <div key={order.id} className="bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border border-slate-800">
+                                            <div>
+                                                <span className="text-white font-bold">{order.client}</span> - {order.items}
+                                                <p className="text-slate-500 text-xs">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-green-400 font-bold">S/ {order.total.toFixed(2)}</p>
+                                                <span className="text-slate-400 text-xs">{order.status}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        {tab === 'pagos' && (
+                            <div>
+                                <h3 className="text-lg font-bold mb-4 text-red-500">Pagos de Comisión de Lili</h3>
+                                <div className="space-y-4">
+                                    {payments.length === 0 ? <div className="bg-slate-900 p-4 rounded-xl text-slate-500 text-center">No hay pagos registrados.</div> : (
+                                        payments.map(pay => (
+                                            <div key={pay.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                                                <div className="flex items-center gap-4">
+                                                    <button onClick={() => setModalReceipt(pay.receipt)} className="bg-slate-800 p-2 rounded-lg text-blue-400 text-xs hover:bg-slate-700">👁️ Ver Comprobante</button>
+                                                    <div>
+                                                        <p className="text-white text-sm font-semibold">Ref: {pay.reference}</p>
+                                                        <p className="text-slate-400 text-xs">{new Date(pay.createdAt).toLocaleString()}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 w-full md:w-auto">
+                                                    {pay.status === 'Pendiente' ? (
+                                                        <button onClick={() => approvePayment(pay.id)} className="bg-green-500 text-slate-900 px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Aprobar Pago</button>
+                                                    ) : (
+                                                        <span className="px-4 py-2 rounded-full text-xs font-bold bg-green-900/50 text-green-400 text-center">✅ Aprobado</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
