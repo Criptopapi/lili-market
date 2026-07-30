@@ -339,7 +339,7 @@
             const [pass, setPass] = useState('');
             const [error, setError] = useState('');
             const [modalReceipt, setModalReceipt] = useState(null);
-            const [searchTerm, setSearchTerm] = useState(''); // Estado para el filtro
+            const [searchTerm, setSearchTerm] = useState('');
 
             const [commReceipt, setCommReceipt] = useState(null);
             const [commRef, setCommRef] = useState('');
@@ -423,11 +423,12 @@
                 );
             }
 
-            const cycleOrders = orders.filter(o => o.createdAt >= billingCycle);
+            // Filtrar pedidos anulados para los cálculos financieros
+            const validOrders = orders.filter(o => o.status !== "Anulado");
+            const cycleOrders = validOrders.filter(o => o.createdAt >= billingCycle);
             const totalSalesCycle = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const yourCommission = totalSalesCycle * 0.05;
 
-            // Lógica de Filtro
             const filteredOrders = orders.filter(o => {
                 const term = searchTerm.toLowerCase();
                 return o.client.toLowerCase().includes(term) || 
@@ -487,7 +488,7 @@
                                 <div className="space-y-3">
                                     {filteredOrders.length === 0 ? ( <div className="bg-slate-800 p-8 rounded-xl text-center text-slate-500">No se encontraron pedidos.</div> ) : (
                                         filteredOrders.map(order => (
-                                            <div key={order.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-green-500 shadow-sm flex justify-between items-start">
+                                            <div key={order.id} className={`bg-slate-800 p-4 rounded-xl border-l-4 ${order.status === 'Anulado' ? 'border-red-500 opacity-60' : 'border-green-500'} shadow-sm flex justify-between items-start`}>
                                                 <div>
                                                     <p className="font-bold text-white text-sm">👤 {order.client}</p>
                                                     <p className="text-white text-sm">{order.items}</p>
@@ -496,10 +497,13 @@
                                                     <p className="text-xs text-slate-500 mt-1">🕒 {new Date(order.createdAt).toLocaleString()}</p>
                                                     <button onClick={() => setModalReceipt(order.receipt)} className="inline-block mt-2 text-xs bg-slate-700 text-green-400 px-2 py-1 rounded hover:bg-slate-600">👁️ Ver Comprobante</button>
                                                 </div>
-                                                <div className="text-right">
-                                                    <span className={`block px-3 py-1 rounded-full text-xs font-bold mb-2 ${order.status === 'Recibido' ? 'bg-yellow-900/50 text-yellow-400' : order.status === 'En Camino' ? 'bg-blue-900/50 text-blue-400' : 'bg-green-900/50 text-green-400'}`}>{order.status}</span>
-                                                    {order.status === 'Recibido' && <button onClick={() => updateOrderStatus(order.id, 'En Camino')} className="text-xs bg-blue-500 text-white px-3 py-1 rounded font-bold w-full mb-1">Despachar</button>}
+                                                <div className="text-right flex flex-col items-end gap-1">
+                                                    <span className={`block px-3 py-1 rounded-full text-xs font-bold mb-1 ${order.status === 'Recibido' ? 'bg-yellow-900/50 text-yellow-400' : order.status === 'En Camino' ? 'bg-blue-900/50 text-blue-400' : order.status === 'Anulado' ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>{order.status}</span>
+                                                    {order.status === 'Recibido' && <button onClick={() => updateOrderStatus(order.id, 'En Camino')} className="text-xs bg-blue-500 text-white px-3 py-1 rounded font-bold w-full">Despachar</button>}
                                                     {order.status === 'En Camino' && <button onClick={() => updateOrderStatus(order.id, 'Entregado')} className="text-xs bg-green-500 text-slate-900 px-3 py-1 rounded font-bold w-full">Entregado</button>}
+                                                    {order.status !== 'Anulado' && order.status !== 'Entregado' && (
+                                                        <button onClick={() => updateOrderStatus(order.id, 'Anulado')} className="text-xs bg-red-800 text-white px-3 py-1 rounded font-bold w-full mt-1 hover:bg-red-900">Anular Pedido</button>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))
@@ -606,7 +610,7 @@
             const [payments, setPayments] = useState([]);
             const [tab, setTab] = useState('dashboard');
             const [modalReceipt, setModalReceipt] = useState(null);
-            const [searchTerm, setSearchTerm] = useState(''); // Estado para el filtro
+            const [searchTerm, setSearchTerm] = useState('');
 
             useEffect(() => {
                 if (auth) {
@@ -637,6 +641,30 @@
                 await db.collection('commission_payments').doc(id).update({ status: "Aprobado" });
             };
 
+            const resetAdminPlatform = async () => {
+                if(confirm("⚠️ ¿Borrar TODOS los pedidos y pagos de Lili? Esto reiniciará su panel a cero.")) {
+                    const ordersSnap = await db.collection('orders').get();
+                    ordersSnap.forEach(doc => doc.ref.delete());
+                    const paymentsSnap = await db.collection('commission_payments').get();
+                    paymentsSnap.forEach(doc => doc.ref.delete());
+                    await db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
+                    alert("Plataforma del Admin reseteada exitosamente.");
+                }
+            };
+
+            const resetGlobalPlatform = async () => {
+                if(confirm("🚨 PELIGRO: ¿Borrar TODO (Pedidos, Pagos, Productos y Configuraciones)? La app quedará como recién instalada.")) {
+                    const ordersSnap = await db.collection('orders').get();
+                    ordersSnap.forEach(doc => doc.ref.delete());
+                    const paymentsSnap = await db.collection('commission_payments').get();
+                    paymentsSnap.forEach(doc => doc.ref.delete());
+                    const productsSnap = await db.collection('products').get();
+                    productsSnap.forEach(doc => doc.ref.delete());
+                    await db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
+                    alert("Plataforma Global reseteada. Volviendo a estado de fábrica...");
+                }
+            };
+
             if (!auth) {
                 return (
                     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
@@ -650,14 +678,14 @@
                 );
             }
 
-            const totalSalesAllTime = orders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
+            const validOrders = orders.filter(o => o.status !== "Anulado");
+            const totalSalesAllTime = validOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const totalCommissionAllTime = totalSalesAllTime * 0.05;
 
-            const cycleOrders = orders.filter(o => o.createdAt >= billingCycle);
+            const cycleOrders = validOrders.filter(o => o.createdAt >= billingCycle);
             const cycleSales = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const cycleCommission = cycleSales * 0.05;
 
-            // Lógica de Filtro
             const filteredOrders = orders.filter(o => {
                 const term = searchTerm.toLowerCase();
                 return o.client.toLowerCase().includes(term) || 
@@ -705,6 +733,19 @@
                                     </div>
                                 </div>
 
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-yellow-500/30 flex flex-col items-center justify-center text-center">
+                                        <p className="text-yellow-400 text-sm font-bold mb-2">⚠️ Resetear Tienda (Admin)</p>
+                                        <p className="text-slate-400 text-xs mb-3">Borra todos los pedidos y pagos de Lili. Útil para empezar a operar limpio.</p>
+                                        <button onClick={resetAdminPlatform} className="bg-yellow-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-yellow-700 w-full">Resetear Panel de Lili</button>
+                                    </div>
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-red-500 flex flex-col items-center justify-center text-center">
+                                        <p className="text-red-500 text-sm font-bold mb-2">🚨 Resetear Plataforma (Global)</p>
+                                        <p className="text-slate-400 text-xs mb-3">Borra TODO (Pedidos, Pagos, Productos). La app queda como recién instalada.</p>
+                                        <button onClick={resetGlobalPlatform} className="bg-red-800 text-white px-4 py-2 rounded font-bold text-sm hover:bg-red-900 w-full">Factory Reset (Borrar Todo)</button>
+                                    </div>
+                                </div>
+
                                 <input 
                                     type="text" 
                                     placeholder="🔍 Buscar en todo el historial..." 
@@ -717,7 +758,7 @@
                                 <div className="space-y-2">
                                     {filteredOrders.length === 0 ? <div className="bg-slate-900 p-4 rounded-xl text-slate-500 text-center">No se encontraron pedidos.</div> : (
                                         filteredOrders.map(order => (
-                                            <div key={order.id} className="bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border border-slate-800">
+                                            <div key={order.id} className={`bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border ${order.status === 'Anulado' ? 'border-red-500/50 opacity-60' : 'border-slate-800'}`}>
                                                 <div>
                                                     <span className="text-white font-bold">{order.client}</span> - {order.items}
                                                     <p className="text-slate-500 text-xs">🕒 {new Date(order.createdAt).toLocaleString()}</p>
