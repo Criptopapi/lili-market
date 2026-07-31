@@ -576,7 +576,7 @@
                                                     <p className="text-sm text-green-400 font-semibold mb-2">Total: S/ {order.total.toFixed(2)}</p>
                                                     <p className="text-xs text-slate-400">📍 {order.location}</p>
                                                     <p className="text-xs text-slate-500 mt-1">🕒 {new Date(order.createdAt).toLocaleString()}</p>
-                                                    <button onClick={() => setModalReceipt(order.receipt)} className="inline-block mt-2 text-xs bg-slate-700 text-green-400 px-2 py-1 rounded hover:bg-slate-600">👁️ Ver Comprobante</button>
+                                                    <button onClick={() => setModalReceipt(order.receipt)} className="inline-block mt-2 text-xs bg-slate-700 text-white px-2 py-1 rounded hover:bg-slate-600">👁️ Ver Comprobante</button>
                                                 </div>
                                                 <div className="text-right flex flex-col items-end gap-1">
                                                     <span className={`block px-3 py-1 rounded-full text-xs font-bold mb-1 ${order.status === 'Recibido' ? 'bg-yellow-900/50 text-yellow-400' : order.status === 'En Camino' ? 'bg-blue-900/50 text-blue-400' : order.status === 'Anulado' ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>{order.status}</span>
@@ -691,7 +691,7 @@
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${pay.status === 'Pendiente' ? 'bg-yellow-900/50 text-yellow-400' : pay.status === 'Rechazado' ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>{pay.status}</span>
-                                                    <button onClick={() => setModalReceipt(pay.receipt)} className="text-xs bg-slate-700 text-blue-400 px-2 py-1 rounded hover:bg-slate-600">👁️ Ver</button>
+                                                    <button onClick={() => setModalReceipt(pay.receipt)} className="text-xs bg-slate-700 text-white px-2 py-1 rounded hover:bg-slate-600">👁️ Ver</button>
                                                 </div>
                                             </div>
                                         ))
