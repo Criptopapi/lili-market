@@ -535,10 +535,10 @@
                         </div>
 
                         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-                            <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
-                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}}`}>Productos</button>
-                            <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
-                            <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}}`}>Mi Tienda</button>
+                            <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}}`}>Productos</button>
+                            <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
+                            <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}}`}>Mi Tienda</button>
                         </div>
 
                         {tab === 'pedidos' && (
@@ -581,7 +581,7 @@
                                                 <div className="text-right flex flex-col items-end gap-1">
                                                     <span className={`block px-3 py-1 rounded-full text-xs font-bold mb-1 ${order.status === 'Recibido' ? 'bg-yellow-900/50 text-yellow-400' : order.status === 'En Camino' ? 'bg-blue-900/50 text-blue-400' : order.status === 'Anulado' ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>{order.status}</span>
                                                     {order.status === 'Recibido' && <button onClick={() => updateOrderStatus(order.id, 'En Camino')} className="text-xs bg-blue-500 text-white px-3 py-1 rounded font-bold w-full">Despachar</button>}
-                                                    {order.status === 'En Camino' && <button onClick={() => updateOrderStatus(order.id, 'Entregado')} className="text-xs bg-green-500 text-slate-900 px-3 py-1 rounded font-bold w-full">Entregado</button>}
+                                                    {order.status === 'En Camino' && <button onClick={() => updateOrderStatus(order.id, 'Entregado')} className="text-xs bg-green-500 text-white px-3 py-1 rounded font-bold w-full">Entregado</button>}
                                                     {order.status !== 'Anulado' && order.status !== 'Entregado' && (
                                                         <button onClick={() => updateOrderStatus(order.id, 'Anulado')} className="text-xs bg-red-800 text-white px-3 py-1 rounded font-bold w-full mt-1 hover:bg-red-900">Anular</button>
                                                     )}
@@ -674,7 +674,7 @@
                                                 {commReceipt && <img src={commReceipt} className="w-20 h-20 object-cover mt-2 rounded-md" alt="Comprobante" />}
                                             </div>
                                             {commError && <p className="text-red-400 text-sm">{commError}</p>}
-                                            <button type="submit" className="bg-green-500 text-slate-900 py-2 rounded-lg font-bold mt-2">Enviar Declaración</button>
+                                            <button type="submit" className="bg-green-500 text-white py-2 rounded-lg font-bold mt-2">Enviar Declaración</button>
                                         </form>
                                     </div>
                                 </div>
