@@ -75,7 +75,6 @@
         function App() {
             const [route, setRoute] = useState(window.location.hash);
             const [products, setProducts] = useState([]);
-            const [billingCycle, setBillingCycle] = useState(Date.now());
             const [clientConfig, setClientConfig] = useState({ yapeNumber: '', yapeQR: '' });
             const [superadminConfig, setSuperadminConfig] = useState({ yapeNumber: '', yapeQR: '' });
             const [loading, setLoading] = useState(true);
@@ -86,10 +85,6 @@
                 const unsubProducts = db.collection('products').onSnapshot(snapshot => {
                     setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
-                });
-
-                db.collection('config').doc('billing').onSnapshot(doc => {
-                    if (doc.exists) setBillingCycle(doc.data().cycleStartDate);
                 });
 
                 db.collection('config').doc('client_payment').onSnapshot(doc => {
@@ -111,7 +106,6 @@
                             { code: "C2", name: "Red Bull", price: 8.00, img: "https://images.unsplash.com/photo-1622597467836-f3285f2131b8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 8 }
                         ];
                         initialData.forEach(p => db.collection('products').add(p));
-                        db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
                     }
                 });
 
@@ -124,8 +118,8 @@
 
             if (loading) return <div className="min-h-screen flex items-center justify-center text-green-400 font-display">CARGANDO MÁQUINA...</div>;
 
-            if (route === '#superadmin') return <SuperAdminApp onBackClick={goClient} billingCycle={billingCycle} superadminConfig={superadminConfig} />;
-            if (route === '#admin') return <AdminApp onBackClick={goClient} products={products} billingCycle={billingCycle} clientConfig={clientConfig} superadminConfig={superadminConfig} />;
+            if (route === '#superadmin') return <SuperAdminApp onBackClick={goClient} superadminConfig={superadminConfig} />;
+            if (route === '#admin') return <AdminApp onBackClick={goClient} products={products} clientConfig={clientConfig} superadminConfig={superadminConfig} />;
             
             return <ClientApp onAdminClick={goAdmin} products={products} clientConfig={clientConfig} />;
         }
@@ -139,7 +133,7 @@
             const [receipt, setReceipt] = useState(null);
             const [error, setError] = useState('');
             const [loadingOrder, setLoadingOrder] = useState(false);
-            const [lastOrderInfo, setLastOrderInfo] = useState(null); // Nuevo estado para el resumen
+            const [lastOrderInfo, setLastOrderInfo] = useState(null);
 
             const availableProducts = products.filter(p => p.stock > 0);
 
@@ -180,7 +174,7 @@
                 }
                 setLoadingOrder(true);
                 try {
-                    const orderCode = "LM-" + Date.now().toString().slice(-6); // Genera código corto
+                    const orderCode = "LM-" + Date.now().toString().slice(-6);
                     const orderData = {
                         code: orderCode,
                         client: clientName,
@@ -202,7 +196,7 @@
                     });
                     await batch.commit();
                     
-                    setLastOrderInfo({ code: orderCode, summary: orderData.items, total: totalPrice }); // Guardar resumen
+                    setLastOrderInfo({ code: orderCode, summary: orderData.items, total: totalPrice });
                     setCart([]); setClientName(''); setLocation(''); setReceipt(null);
                     setView('success');
                 } catch (err) {
@@ -376,7 +370,7 @@
         }
 
         // --- VISTA ADMIN (LILI) ---
-        function AdminApp({ onBackClick, products, billingCycle, clientConfig, superadminConfig }) {
+        function AdminApp({ onBackClick, products, clientConfig, superadminConfig }) {
             const [orders, setOrders] = useState([]);
             const [payments, setPayments] = useState([]);
             const [tab, setTab] = useState('pedidos');
@@ -387,6 +381,8 @@
             const [searchTerm, setSearchTerm] = useState('');
 
             const [commReceipt, setCommReceipt] = useState(null);
+            const [commAmount, setCommAmount] = useState('');
+            const [commDate, setCommDate] = useState('');
             const [commRef, setCommRef] = useState('');
             const [commError, setCommError] = useState('');
 
@@ -432,15 +428,17 @@
 
             const submitPayment = async (e) => {
                 e.preventDefault();
-                if(!commReceipt || !commRef) { setCommError("Sube el comprobante y pon una referencia."); return; }
+                if(!commReceipt || !commAmount || !commDate) { setCommError("Sube el comprobante, ingresa el monto y la fecha."); return; }
                 try {
                     await db.collection('commission_payments').add({
                         receipt: commReceipt,
+                        amountPaid: parseFloat(commAmount),
+                        paymentDate: commDate,
                         reference: commRef,
                         status: "Pendiente",
                         createdAt: Date.now()
                     });
-                    setCommReceipt(null); setCommRef(''); setCommError('');
+                    setCommReceipt(null); setCommAmount(''); setCommDate(''); setCommRef(''); setCommError('');
                     alert("Comprobante enviado al administrador de la plataforma.");
                 } catch(err) { console.error(err); setCommError("Error al subir."); }
             };
@@ -493,9 +491,11 @@
             }
 
             const validOrders = orders.filter(o => o.status !== "Anulado");
-            const cycleOrders = validOrders.filter(o => o.createdAt >= billingCycle);
-            const totalSalesCycle = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
-            const yourCommission = totalSalesCycle * 0.05;
+            const totalSalesAllTime = validOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
+            const totalCommissionAllTime = totalSalesAllTime * 0.05;
+            const approvedPayments = payments.filter(p => p.status === "Aprobado");
+            const totalPaid = approvedPayments.reduce((sum, p) => sum + (Number(p.amountPaid) || 0), 0);
+            const currentDebt = totalCommissionAllTime - totalPaid;
 
             const filteredOrders = orders.filter(o => {
                 const term = searchTerm.toLowerCase();
@@ -535,12 +535,12 @@
                             <>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                        <p className="text-slate-400 text-xs">Ventas del Ciclo (Entregadas)</p>
-                                        <p className="text-xl font-bold text-white">S/ {totalSalesCycle.toFixed(2)}</p>
+                                        <p className="text-slate-400 text-xs">Ventas Históricas (Entregadas)</p>
+                                        <p className="text-xl font-bold text-white">S/ {totalSalesAllTime.toFixed(2)}</p>
                                     </div>
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                        <p className="text-slate-400 text-xs">Comisión Plataforma (5%)</p>
-                                        <p className="text-xl font-bold text-green-400">S/ {yourCommission.toFixed(2)}</p>
+                                        <p className="text-slate-400 text-xs">Comisión Generada (5%)</p>
+                                        <p className="text-xl font-bold text-green-400">S/ {totalCommissionAllTime.toFixed(2)}</p>
                                     </div>
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-center">
                                         <button onClick={downloadCSV} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold w-full">📄 Descargar Excel (CSV)</button>
@@ -626,8 +626,19 @@
 
                         {tab === 'pagos' && (
                             <div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-red-500/30">
+                                        <p className="text-slate-400 text-xs">Deuda Actual con Plataforma</p>
+                                        <p className="text-xl font-bold text-red-400">S/ {currentDebt.toFixed(2)}</p>
+                                    </div>
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                        <p className="text-slate-400 text-xs">Total Pagado (Aprobado)</p>
+                                        <p className="text-xl font-bold text-green-400">S/ {totalPaid.toFixed(2)}</p>
+                                    </div>
+                                </div>
+
                                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
-                                    <h3 className="text-lg font-bold text-white mb-4">Pagar Comisión de Plataforma</h3>
+                                    <h3 className="text-lg font-bold text-white mb-4">Declarar Pago de Comisión</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="flex flex-col items-center justify-center bg-slate-900 p-4 rounded-lg">
                                             {superadminConfig.yapeQR ? (
@@ -635,21 +646,29 @@
                                             ) : (
                                                 <p className="text-slate-500 text-sm my-4">El administrador no ha configurado su QR.</p>
                                             )}
-                                            <p className="text-sm text-slate-400 text-center">Paga la comisión del ciclo actual (S/ {yourCommission.toFixed(2)})</p>
+                                            <p className="text-sm text-slate-400 text-center">Paga tu deuda actual (S/ {currentDebt.toFixed(2)})</p>
                                             {superadminConfig.yapeNumber && <p className="text-green-400 font-bold mt-1">{superadminConfig.yapeNumber}</p>}
                                         </div>
                                         <form onSubmit={submitPayment} className="flex flex-col gap-2">
                                             <div>
-                                                <label className="text-xs font-bold text-slate-400 block mb-1">1. Sube el comprobante</label>
-                                                <input type="file" accept="image/*" onChange={handleCommFile} className="w-full text-sm p-2 bg-slate-900 rounded-lg border border-slate-700 text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-green-900/50 file:text-green-400" />
-                                                {commReceipt && <img src={commReceipt} className="w-20 h-20 object-cover mt-2 rounded-md" alt="Comprobante" />}
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">1. Monto Pagado (S/) *</label>
+                                                <input type="number" step="0.01" value={commAmount} onChange={(e) => setCommAmount(e.target.value)} placeholder="Ej: 20.00" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" required />
                                             </div>
                                             <div>
-                                                <label className="text-xs font-bold text-slate-400 block mb-1">2. Referencia (Fecha o N° Operación)</label>
-                                                <input type="text" value={commRef} onChange={(e) => setCommRef(e.target.value)} placeholder="Ej: 12-04-2024" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">2. Fecha de Pago *</label>
+                                                <input type="date" value={commDate} onChange={(e) => setCommDate(e.target.value)} className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" required />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">3. Referencia / Descripción (Opcional)</label>
+                                                <input type="text" value={commRef} onChange={(e) => setCommRef(e.target.value)} placeholder="Ej: Pago parcial semana 1" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-400 block mb-1">4. Sube el comprobante *</label>
+                                                <input type="file" accept="image/*" onChange={handleCommFile} className="w-full text-sm p-2 bg-slate-900 rounded-lg border border-slate-700 text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-green-900/50 file:text-green-400" required />
+                                                {commReceipt && <img src={commReceipt} className="w-20 h-20 object-cover mt-2 rounded-md" alt="Comprobante" />}
                                             </div>
                                             {commError && <p className="text-red-400 text-sm">{commError}</p>}
-                                            <button type="submit" className="bg-green-500 text-slate-900 py-2 rounded-lg font-bold mt-2">Enviar Comprobante</button>
+                                            <button type="submit" className="bg-green-500 text-slate-900 py-2 rounded-lg font-bold mt-2">Enviar Declaración</button>
                                         </form>
                                     </div>
                                 </div>
@@ -660,11 +679,12 @@
                                         payments.map(pay => (
                                             <div key={pay.id} className="bg-slate-800 p-4 rounded-xl border-l-4 border-blue-500 flex justify-between items-center">
                                                 <div>
-                                                    <p className="text-white text-sm font-semibold">Ref: {pay.reference}</p>
-                                                    <p className="text-slate-400 text-xs">{new Date(pay.createdAt).toLocaleString()}</p>
+                                                    <p className="text-white text-sm font-bold">S/ {Number(pay.amountPaid).toFixed(2)} - {pay.paymentDate}</p>
+                                                    <p className="text-slate-400 text-xs">Ref: {pay.reference || 'Sin referencia'}</p>
+                                                    <p className="text-slate-500 text-xs">Enviado: {new Date(pay.createdAt).toLocaleString()}</p>
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${pay.status === 'Pendiente' ? 'bg-yellow-900/50 text-yellow-400' : 'bg-green-900/50 text-green-400'}`}>{pay.status}</span>
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${pay.status === 'Pendiente' ? 'bg-yellow-900/50 text-yellow-400' : pay.status === 'Rechazado' ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>{pay.status}</span>
                                                     <button onClick={() => setModalReceipt(pay.receipt)} className="text-xs bg-slate-700 text-blue-400 px-2 py-1 rounded hover:bg-slate-600">👁️ Ver</button>
                                                 </div>
                                             </div>
@@ -701,7 +721,7 @@
         }
 
         // --- VISTA SUPERADMIN (TÚ) ---
-        function SuperAdminApp({ onBackClick, billingCycle, superadminConfig }) {
+        function SuperAdminApp({ onBackClick, superadminConfig }) {
             const [auth, setAuth] = useState(false);
             const [pass, setPass] = useState('');
             const [orders, setOrders] = useState([]);
@@ -736,15 +756,12 @@
                 else alert("Contraseña incorrecta");
             };
 
-            const resetBillingCycle = async () => {
-                if(confirm("¿Seguro que deseas marcar el pago de Lili y reiniciar el ciclo de comisiones?")) {
-                    await db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
-                    alert("Ciclo reiniciado. El contador de comisiones de Lili volvió a cero.");
-                }
-            };
-
             const approvePayment = async (id) => {
                 await db.collection('commission_payments').doc(id).update({ status: "Aprobado" });
+            };
+
+            const rejectPayment = async (id) => {
+                await db.collection('commission_payments').doc(id).update({ status: "Rechazado" });
             };
 
             const resetAdminPlatform = async () => {
@@ -753,7 +770,6 @@
                     ordersSnap.forEach(doc => doc.ref.delete());
                     const paymentsSnap = await db.collection('commission_payments').get();
                     paymentsSnap.forEach(doc => doc.ref.delete());
-                    await db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
                     alert("Plataforma del Admin reseteada exitosamente.");
                 }
             };
@@ -766,7 +782,6 @@
                     paymentsSnap.forEach(doc => doc.ref.delete());
                     const productsSnap = await db.collection('products').get();
                     productsSnap.forEach(doc => doc.ref.delete());
-                    await db.collection('config').doc('billing').set({ cycleStartDate: Date.now() });
                     alert("Plataforma Global reseteada. Volviendo a estado de fábrica...");
                 }
             };
@@ -803,10 +818,9 @@
             const validOrders = orders.filter(o => o.status !== "Anulado");
             const totalSalesAllTime = validOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
             const totalCommissionAllTime = totalSalesAllTime * 0.05;
-
-            const cycleOrders = validOrders.filter(o => o.createdAt >= billingCycle);
-            const cycleSales = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
-            const cycleCommission = cycleSales * 0.05;
+            const approvedPayments = payments.filter(p => p.status === "Aprobado");
+            const totalPaid = approvedPayments.reduce((sum, p) => sum + (Number(p.amountPaid) || 0), 0);
+            const currentDebt = totalCommissionAllTime - totalPaid;
 
             const filteredOrders = orders.filter(o => {
                 const term = searchTerm.toLowerCase();
@@ -843,17 +857,19 @@
 
                         {tab === 'dashboard' && (
                             <>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                                     <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <p className="text-slate-400 text-xs">Total Histórico (Plataforma)</p>
+                                        <p className="text-slate-400 text-xs">Ventas Históricas (Plataforma)</p>
                                         <p className="text-2xl font-bold text-white">S/ {totalSalesAllTime.toFixed(2)}</p>
-                                        <p className="text-green-400 text-sm">Comisión Total: S/ {totalCommissionAllTime.toFixed(2)}</p>
+                                    </div>
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <p className="text-slate-400 text-xs">Comisión Total Generada</p>
+                                        <p className="text-2xl font-bold text-white">S/ {totalCommissionAllTime.toFixed(2)}</p>
                                     </div>
                                     <div className="bg-slate-900 p-4 rounded-xl border border-red-500">
-                                        <p className="text-slate-400 text-xs">Ciclo Actual (Pendiente de Pago)</p>
-                                        <p className="text-2xl font-bold text-white">S/ {cycleSales.toFixed(2)}</p>
-                                        <p className="text-red-400 text-sm">Comisión a Cobrar: S/ {cycleCommission.toFixed(2)}</p>
-                                        <button onClick={resetBillingCycle} className="mt-2 w-full bg-red-500 text-white py-2 rounded font-bold text-sm hover:bg-red-600">VALIDAR PAGO Y RESETEAR CICLO</button>
+                                        <p className="text-slate-400 text-xs">Deuda Actual de Lili</p>
+                                        <p className="text-2xl font-bold text-white">S/ {currentDebt.toFixed(2)}</p>
+                                        <p className="text-green-400 text-sm mt-1">Total Cobrado: S/ {totalPaid.toFixed(2)}</p>
                                     </div>
                                 </div>
 
@@ -909,15 +925,19 @@
                                                 <div className="flex items-center gap-4">
                                                     <button onClick={() => setModalReceipt(pay.receipt)} className="bg-slate-800 p-2 rounded-lg text-blue-400 text-xs hover:bg-slate-700">👁️ Ver Comprobante</button>
                                                     <div>
-                                                        <p className="text-white text-sm font-semibold">Ref: {pay.reference}</p>
-                                                        <p className="text-slate-400 text-xs">{new Date(pay.createdAt).toLocaleString()}</p>
+                                                        <p className="text-white text-sm font-bold">Monto Declarado: S/ {Number(pay.amountPaid).toFixed(2)}</p>
+                                                        <p className="text-slate-400 text-xs">Fecha: {pay.paymentDate}</p>
+                                                        <p className="text-slate-500 text-xs">Ref: {pay.reference || 'Sin referencia'}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3 w-full md:w-auto">
                                                     {pay.status === 'Pendiente' ? (
-                                                        <button onClick={() => approvePayment(pay.id)} className="bg-green-500 text-slate-900 px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Aprobar Pago</button>
+                                                        <>
+                                                            <button onClick={() => approvePayment(pay.id)} className="bg-green-500 text-slate-900 px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Aprobar Pago</button>
+                                                            <button onClick={() => rejectPayment(pay.id)} className="bg-red-600 text-white px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Rechazar</button>
+                                                        </>
                                                     ) : (
-                                                        <span className="px-4 py-2 rounded-full text-xs font-bold bg-green-900/50 text-green-400 text-center">✅ Aprobado</span>
+                                                        <span className={`px-4 py-2 rounded-full text-xs font-bold text-center ${pay.status === 'Aprobado' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>{pay.status}</span>
                                                     )}
                                                 </div>
                                             </div>
