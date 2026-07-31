@@ -79,7 +79,7 @@
             useEffect(() => {
                 window.addEventListener('hashchange', () => setRoute(window.location.hash));
                 
-                const unsubProducts = db.collection('products').onSnapshot(snapshot => {
+                const unsubProducts = db.collection('products').orderBy('order', 'asc').onSnapshot(snapshot => {
                     setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoading(false);
                 });
@@ -95,12 +95,12 @@
                 db.collection('products').get().then(snapshot => {
                     if(snapshot.empty) {
                         const initialData = [
-                            { code: "A1", name: "Coca Cola 1.5L", price: 7.00, img: "https://images.unsplash.com/photo-1554866585-cd94860890b7?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 10 },
-                            { code: "A2", name: "Inka Chips", price: 3.50, img: "https://images.unsplash.com/photo-1613919113640-25732ec5e61f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 15 },
-                            { code: "B1", name: "Galleta Oreo", price: 2.00, img: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 20 },
-                            { code: "B2", name: "Chocolate", price: 2.50, img: "https://images.unsplash.com/photo-1623660053975-cf75a8be0908?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 5 },
-                            { code: "C1", name: "Agua 500ml", price: 1.50, img: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 30 },
-                            { code: "C2", name: "Red Bull", price: 8.00, img: "https://images.unsplash.com/photo-1622597467836-f3285f2131b8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 8 }
+                            { code: "A1", name: "Coca Cola 1.5L", price: 7.00, img: "https://images.unsplash.com/photo-1554866585-cd94860890b7?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 10, order: 1 },
+                            { code: "A2", name: "Inka Chips", price: 3.50, img: "https://images.unsplash.com/photo-1613919113640-25732ec5e61f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 15, order: 2 },
+                            { code: "B1", name: "Galleta Oreo", price: 2.00, img: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 20, order: 3 },
+                            { code: "B2", name: "Chocolate", price: 2.50, img: "https://images.unsplash.com/photo-1623660053975-cf75a8be0908?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 5, order: 4 },
+                            { code: "C1", name: "Agua 500ml", price: 1.50, img: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 30, order: 5 },
+                            { code: "C2", name: "Red Bull", price: 8.00, img: "https://images.unsplash.com/photo-1622597467836-f3285f2131b8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80", stock: 8, order: 6 }
                         ];
                         initialData.forEach(p => db.collection('products').add(p));
                     }
@@ -221,7 +221,7 @@
 
                         <p className="text-slate-500 text-xs mb-6">📸 Toma una captura de pantalla a este comprobante por si acaso.</p>
                         
-                        <button onClick={() => { setView('home'); setLastOrderInfo(null); }} className="bg-green-500 text-slate-900 py-3 px-8 rounded-xl font-bold hover:bg-green-400 mb-2">Volver a la Máquina</button>
+                        <button onClick={() => { setView('home'); setLastOrderInfo(null); }} className="bg-green-500 text-white py-3 px-8 rounded-xl font-bold hover:bg-green-400 mb-2">Volver a la Máquina</button>
                         <button onClick={onAdminClick} className="text-sm text-slate-500 underline">Ver Panel Admin</button>
                     </div>
                 );
@@ -345,7 +345,7 @@
                                                 <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ej: Piso 3" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
                                             </div>
                                         </div>
-                                        <button onClick={confirmOrder} disabled={loadingOrder} className="w-full bg-green-500 text-slate-900 py-3 rounded-xl font-display font-bold text-md hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <button onClick={confirmOrder} disabled={loadingOrder} className="w-full bg-green-500 text-white py-3 rounded-xl font-display font-bold text-md hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed">
                                             {loadingOrder ? 'Procesando...' : 'CONFIRMAR PEDIDO'}
                                         </button>
                                     </>
@@ -356,7 +356,7 @@
 
                     {cart.length > 0 && view !== 'checkout' && (
                         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-3 bg-black/90 backdrop-blur border-t border-green-500/30">
-                            <button onClick={() => setView('checkout')} className="w-full bg-green-500 text-slate-900 py-3 rounded-xl font-display font-bold text-md flex justify-between items-center px-6 hover:bg-green-400">
+                            <button onClick={() => setView('checkout')} className="w-full bg-green-500 text-white py-3 rounded-xl font-display font-bold text-md flex justify-between items-center px-6 hover:bg-green-400">
                                 <span>PAGAR AHORA</span>
                                 <span>S/ {totalPrice.toFixed(2)}</span>
                             </button>
@@ -423,7 +423,28 @@
             };
 
             const updateOrderStatus = async (id, status) => { await db.collection('orders').doc(id).update({ status }); };
-            const addNewProduct = async () => { await db.collection('products').add({ code: "N", name: "Nuevo", price: 1.00, img: "https://via.placeholder.com/150", stock: 0 }); };
+            
+            const addNewProduct = async () => { 
+                const newOrder = products.length > 0 ? Math.max(...products.map(p => p.order || 0)) + 1 : 1;
+                await db.collection('products').add({ code: "N", name: "Nuevo", price: 1.00, img: "https://via.placeholder.com/150", stock: 0, order: newOrder }); 
+            };
+
+            const moveProduct = async (id, direction) => {
+                const currentIndex = products.findIndex(p => p.id === id);
+                const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+                if (targetIndex < 0 || targetIndex >= products.length) return; 
+
+                const currentProduct = products[currentIndex];
+                const targetProduct = products[targetIndex];
+
+                const batch = db.batch();
+                const currentRef = db.collection('products').doc(currentProduct.id);
+                const targetRef = db.collection('products').doc(targetProduct.id);
+                batch.update(currentRef, { order: targetProduct.order });
+                batch.update(targetRef, { order: currentProduct.order });
+                await batch.commit();
+            };
+
             const updateProductField = async (id, field, value) => { await db.collection('products').doc(id).update({ [field]: value }); };
             const deleteProduct = async (id) => { if(confirm("¿Eliminar?")) await db.collection('products').doc(id).delete(); };
             const handleProductImage = (id, e) => {
@@ -493,7 +514,7 @@
                             <h2 className="text-xl font-display font-bold text-green-400 mb-4 text-center">LILI MARKET - ADMIN</h2>
                             <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white mb-2" autoFocus />
                             {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
-                            <button type="submit" className="w-full bg-green-500 text-slate-900 py-2 rounded-lg font-bold">Entrar</button>
+                            <button type="submit" className="w-full bg-green-500 text-white py-2 rounded-lg font-bold">Entrar</button>
                             <button onClick={onBackClick} className="w-full text-slate-500 text-sm mt-2 hover:underline">← Volver a la tienda</button>
                         </form>
                     </div>
@@ -534,12 +555,12 @@
                             <button onClick={onBackClick} className="text-sm text-slate-400 hover:text-white border border-slate-700 px-3 py-1 rounded">← Volver</button>
                         </div>
 
-                    <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-    <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
-    <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
-    <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
-    <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Mi Tienda</button>
-</div>
+                        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                            <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
+                            <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
+                            <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-400'}`}>Mi Tienda</button>
+                        </div>
 
                         {tab === 'pedidos' && (
                             <>
@@ -596,8 +617,8 @@
                         {tab === 'productos' && (
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-bold text-white">Inventario</h3>
-                                    <button onClick={addNewProduct} className="bg-green-500 text-slate-900 px-3 py-1.5 rounded-lg text-sm font-bold">+ Agregar</button>
+                                    <h3 className="text-lg font-bold text-white">Inventario (Usa ▲▼ para ordenar)</h3>
+                                    <button onClick={addNewProduct} className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold">+ Agregar</button>
                                 </div>
                                 <div className="space-y-4">
                                     {products.map(p => (
@@ -626,6 +647,10 @@
                                                     <span className="text-white font-bold text-sm">{p.stock}</span>
                                                 </div>
                                                 <button onClick={() => updateProductField(p.id, 'stock', p.stock + 1)} className="text-white bg-green-500 w-6 h-6 rounded font-bold text-xs">+</button>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <button onClick={() => moveProduct(p.id, 'up')} className="text-white bg-slate-600 w-6 h-3 rounded-t text-[10px] flex items-center justify-center hover:bg-slate-500">▲</button>
+                                                <button onClick={() => moveProduct(p.id, 'down')} className="text-white bg-slate-600 w-6 h-3 rounded-b text-[10px] flex items-center justify-center hover:bg-slate-500">▼</button>
                                             </div>
                                             <button onClick={() => deleteProduct(p.id)} className="text-red-400 hover:text-red-300 text-xl px-2">🗑️</button>
                                         </div>
@@ -716,7 +741,7 @@
                                             <label className="text-xs font-bold text-slate-400 block mb-1">Número de Yape</label>
                                             <input type="text" value={editYapeNumber} onChange={(e) => setEditYapeNumber(e.target.value)} placeholder="Ej: 999 888 777" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
                                         </div>
-                                        <button type="submit" className="bg-green-500 text-slate-900 py-2 rounded-lg font-bold mt-2">Guardar Cambios</button>
+                                        <button type="submit" className="bg-green-500 text-white py-2 rounded-lg font-bold mt-2">Guardar Cambios</button>
                                     </div>
                                 </form>
                             </div>
@@ -952,7 +977,7 @@
                                                 <div className="flex items-center gap-3 w-full md:w-auto">
                                                     {pay.status === 'Pendiente' ? (
                                                         <>
-                                                            <button onClick={() => approvePayment(pay.id)} className="bg-green-500 text-slate-900 px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Aprobar Pago</button>
+                                                            <button onClick={() => approvePayment(pay.id)} className="bg-green-500 text-white px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Aprobar Pago</button>
                                                             <button onClick={() => rejectPayment(pay.id)} className="bg-red-600 text-white px-4 py-2 rounded font-bold text-sm w-full md:w-auto">Rechazar</button>
                                                         </>
                                                     ) : (
