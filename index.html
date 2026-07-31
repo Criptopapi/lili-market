@@ -64,7 +64,7 @@
 
         const sendTelegramMessage = async (order) => {
             if (TELEGRAM_BOT_TOKEN.includes("TU_TOKEN")) return;
-            const text = `🛒 NUEVO PEDIDO - LILI MARKET\n\n👤 Cliente: ${order.client}\n📍 Ubicación: ${order.location}\n📦 Pedido: ${order.items}\n💰 Total: S/ ${order.total.toFixed(2)}\n\n✅ Comprobante subido en la plataforma.`;
+            const text = `🛒 NUEVO PEDIDO - LILI MARKET (Cód: ${order.code})\n\n👤 Cliente: ${order.client}\n📍 Ubicación: ${order.location}\n📦 Pedido: ${order.items}\n💰 Total: S/ ${order.total.toFixed(2)}\n\n✅ Comprobante subido en la plataforma.`;
             const encodedText = encodeURIComponent(text);
             try {
                 await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodedText}`);
@@ -139,6 +139,7 @@
             const [receipt, setReceipt] = useState(null);
             const [error, setError] = useState('');
             const [loadingOrder, setLoadingOrder] = useState(false);
+            const [lastOrderInfo, setLastOrderInfo] = useState(null); // Nuevo estado para el resumen
 
             const availableProducts = products.filter(p => p.stock > 0);
 
@@ -179,7 +180,9 @@
                 }
                 setLoadingOrder(true);
                 try {
+                    const orderCode = "LM-" + Date.now().toString().slice(-6); // Genera código corto
                     const orderData = {
+                        code: orderCode,
                         client: clientName,
                         items: cart.map(p => `${p.name} (x${p.qty})`).join(", "),
                         total: totalPrice,
@@ -199,6 +202,7 @@
                     });
                     await batch.commit();
                     
+                    setLastOrderInfo({ code: orderCode, summary: orderData.items, total: totalPrice }); // Guardar resumen
                     setCart([]); setClientName(''); setLocation(''); setReceipt(null);
                     setView('success');
                 } catch (err) {
@@ -209,13 +213,25 @@
                 }
             };
 
-            if(view === 'success') {
+            if(view === 'success' && lastOrderInfo) {
                 return (
                     <div className="max-w-md mx-auto p-8 text-center bg-slate-900 min-h-screen flex flex-col justify-center">
-                        <h2 className="text-3xl font-display font-bold text-green-400 mb-4">¡DESPACHADO! 🛒</h2>
-                        <p className="text-slate-300 mb-8">Lili Market recibió tu pedido y lo está preparando. Tu repartidor va hacia tu posición pronto.</p>
-                        <button onClick={() => setView('home')} className="bg-green-500 text-slate-900 py-3 px-8 rounded-xl font-bold hover:bg-green-400">Volver a la Máquina</button>
-                        <button onClick={onAdminClick} className="mt-4 text-sm text-slate-500 underline">Ver Panel Admin</button>
+                        <h2 className="text-3xl font-display font-bold text-green-400 mb-2">¡DESPACHADO! 🛒</h2>
+                        <p className="text-slate-300 mb-6">Lili Market recibió tu pedido.</p>
+                        
+                        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 mb-6 text-left">
+                            <p className="text-center text-green-400 font-display text-xl font-bold mb-4">CÓDIGO: {lastOrderInfo.code}</p>
+                            <div className="border-t border-slate-700 pt-3 space-y-1">
+                                <p className="text-sm text-slate-400">Resumen del pedido:</p>
+                                <p className="text-white text-sm">{lastOrderInfo.summary}</p>
+                                <p className="text-green-400 font-bold text-lg mt-2">Total: S/ {lastOrderInfo.total.toFixed(2)}</p>
+                            </div>
+                        </div>
+
+                        <p className="text-slate-500 text-xs mb-6">📸 Toma una captura de pantalla a este comprobante por si acaso.</p>
+                        
+                        <button onClick={() => { setView('home'); setLastOrderInfo(null); }} className="bg-green-500 text-slate-900 py-3 px-8 rounded-xl font-bold hover:bg-green-400 mb-2">Volver a la Máquina</button>
+                        <button onClick={onAdminClick} className="text-sm text-slate-500 underline">Ver Panel Admin</button>
                     </div>
                 );
             }
@@ -349,8 +365,9 @@
 
                     {cart.length > 0 && view !== 'checkout' && (
                         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-3 bg-black/90 backdrop-blur border-t border-green-500/30">
-                            <button onClick={() => setView('checkout')} className="w-full bg-green-500 text-slate-900 py-3 rounded-xl font-display font-bold text-md flex justify-center items-center hover:bg-green-400">
-                                PAGAR AHORA (S/ {totalPrice.toFixed(2)})
+                            <button onClick={() => setView('checkout')} className="w-full bg-green-500 text-slate-900 py-3 rounded-xl font-display font-bold text-md flex justify-between items-center px-6 hover:bg-green-400">
+                                <span>PAGAR AHORA</span>
+                                <span>S/ {totalPrice.toFixed(2)}</span>
                             </button>
                         </div>
                     )}
@@ -373,7 +390,6 @@
             const [commRef, setCommRef] = useState('');
             const [commError, setCommError] = useState('');
 
-            // Estado para configuración de tienda
             const [editYapeNumber, setEditYapeNumber] = useState(clientConfig.yapeNumber || '');
             const [editYapeQR, setEditYapeQR] = useState(clientConfig.yapeQR || null);
 
@@ -446,10 +462,10 @@
             };
 
             const downloadCSV = () => {
-                let csv = "Fecha,Cliente,Ubicacion,Pedido,Total,Estado\n";
+                let csv = "Codigo,Fecha,Cliente,Ubicacion,Pedido,Total,Estado\n";
                 orders.forEach(o => {
                     const date = new Date(o.createdAt).toLocaleString();
-                    csv += `"${date}","${o.client}","${o.location}","${o.items}",${o.total.toFixed(2)},"${o.status}"\n`;
+                    csv += `"${o.code || 'N/A'}","${date}","${o.client}","${o.location}","${o.items}",${o.total.toFixed(2)},"${o.status}"\n`;
                 });
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
@@ -483,7 +499,8 @@
 
             const filteredOrders = orders.filter(o => {
                 const term = searchTerm.toLowerCase();
-                return o.client.toLowerCase().includes(term) || 
+                return (o.code || '').toLowerCase().includes(term) ||
+                       o.client.toLowerCase().includes(term) || 
                        o.items.toLowerCase().includes(term) || 
                        o.location.toLowerCase().includes(term) ||
                        o.status.toLowerCase().includes(term) ||
@@ -532,7 +549,7 @@
 
                                 <input 
                                     type="text" 
-                                    placeholder="🔍 Buscar por cliente, producto, fecha, estado..." 
+                                    placeholder="🔍 Buscar por código, cliente, producto, estado..." 
                                     value={searchTerm} 
                                     onChange={(e) => setSearchTerm(e.target.value)} 
                                     className="w-full p-2 rounded-lg border border-slate-700 bg-slate-800 text-white text-sm mb-4 focus:outline-none focus:border-green-500"
@@ -543,6 +560,7 @@
                                         filteredOrders.map(order => (
                                             <div key={order.id} className={`bg-slate-800 p-4 rounded-xl border-l-4 ${order.status === 'Anulado' ? 'border-red-500 opacity-60' : 'border-green-500'} shadow-sm flex justify-between items-start`}>
                                                 <div>
+                                                    <p className="text-green-400 font-bold text-sm mb-1">Cód: {order.code || 'N/A'}</p>
                                                     <p className="font-bold text-white text-sm">👤 {order.client}</p>
                                                     <p className="text-white text-sm">{order.items}</p>
                                                     <p className="text-sm text-green-400 font-semibold mb-2">Total: S/ {order.total.toFixed(2)}</p>
@@ -555,7 +573,7 @@
                                                     {order.status === 'Recibido' && <button onClick={() => updateOrderStatus(order.id, 'En Camino')} className="text-xs bg-blue-500 text-white px-3 py-1 rounded font-bold w-full">Despachar</button>}
                                                     {order.status === 'En Camino' && <button onClick={() => updateOrderStatus(order.id, 'Entregado')} className="text-xs bg-green-500 text-slate-900 px-3 py-1 rounded font-bold w-full">Entregado</button>}
                                                     {order.status !== 'Anulado' && order.status !== 'Entregado' && (
-                                                        <button onClick={() => updateOrderStatus(order.id, 'Anulado')} className="text-xs bg-red-800 text-white px-3 py-1 rounded font-bold w-full mt-1 hover:bg-red-900">Anular Pedido</button>
+                                                        <button onClick={() => updateOrderStatus(order.id, 'Anulado')} className="text-xs bg-red-800 text-white px-3 py-1 rounded font-bold w-full mt-1 hover:bg-red-900">Anular</button>
                                                     )}
                                                 </div>
                                             </div>
@@ -692,7 +710,6 @@
             const [modalReceipt, setModalReceipt] = useState(null);
             const [searchTerm, setSearchTerm] = useState('');
 
-            // Estado para configuración de cobro del superadmin
             const [editYapeNumber, setEditYapeNumber] = useState(superadminConfig.yapeNumber || '');
             const [editYapeQR, setEditYapeQR] = useState(superadminConfig.yapeQR || null);
 
@@ -793,7 +810,8 @@
 
             const filteredOrders = orders.filter(o => {
                 const term = searchTerm.toLowerCase();
-                return o.client.toLowerCase().includes(term) || 
+                return (o.code || '').toLowerCase().includes(term) ||
+                       o.client.toLowerCase().includes(term) || 
                        o.items.toLowerCase().includes(term) || 
                        o.location.toLowerCase().includes(term) ||
                        o.status.toLowerCase().includes(term) ||
@@ -854,7 +872,7 @@
 
                                 <input 
                                     type="text" 
-                                    placeholder="🔍 Buscar en todo el historial..." 
+                                    placeholder="🔍 Buscar por código, cliente, estado..." 
                                     value={searchTerm} 
                                     onChange={(e) => setSearchTerm(e.target.value)} 
                                     className="w-full p-2 rounded-lg border border-slate-800 bg-slate-950 text-white text-sm mb-4 focus:outline-none focus:border-red-500"
@@ -866,6 +884,7 @@
                                         filteredOrders.map(order => (
                                             <div key={order.id} className={`bg-slate-900 p-3 rounded-lg flex justify-between items-center text-sm border ${order.status === 'Anulado' ? 'border-red-500/50 opacity-60' : 'border-slate-800'}`}>
                                                 <div>
+                                                    <span className="text-red-400 font-bold mr-2">[{order.code || 'N/A'}]</span>
                                                     <span className="text-white font-bold">{order.client}</span> - {order.items}
                                                     <p className="text-slate-500 text-xs">🕒 {new Date(order.createdAt).toLocaleString()}</p>
                                                 </div>
