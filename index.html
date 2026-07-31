@@ -23,7 +23,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- CONFIGURACIÓN ---
+        // --- CONFIGURACIÓN FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyAlOxVzPhjz1fhz0n5NGroAj8H7w28SEz8",
             authDomain: "markets-bc527.firebaseapp.com",
@@ -34,11 +34,6 @@
         };
         const app = firebase.initializeApp(firebaseConfig);
         const db = app.firestore();
-
-        const TELEGRAM_BOT_TOKEN = "8611530071:AAFYIVriMU6VQwZCIOFp2xSya_VSFczNHok";
-        const TELEGRAM_CHAT_ID = "-1004318541160";
-        const ADMIN_PASSWORD = "lili2024";
-        const SUPERADMIN_PASSWORD = "superadmin";
 
         // --- UTILIDADES ---
         const compressImage = (file, callback) => {
@@ -63,11 +58,13 @@
         };
 
         const sendTelegramMessage = async (order) => {
-            if (TELEGRAM_BOT_TOKEN.includes("TU_TOKEN")) return;
             const text = `🛒 NUEVO PEDIDO - LILI MARKET (Cód: ${order.code})\n\n👤 Cliente: ${order.client}\n📍 Ubicación: ${order.location}\n📦 Pedido: ${order.items}\n💰 Total: S/ ${order.total.toFixed(2)}\n\n✅ Comprobante subido en la plataforma.`;
-            const encodedText = encodeURIComponent(text);
             try {
-                await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodedText}`);
+                await fetch('/api/send-telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
             } catch (e) { console.error("Error Telegram:", e); }
         };
 
@@ -406,10 +403,23 @@
                 }
             }, [auth]);
 
-            const login = (e) => {
+            const login = async (e) => {
                 e.preventDefault();
-                if (pass === ADMIN_PASSWORD) { setAuth(true); setError(''); }
-                else setError('Contraseña incorrecta');
+                try {
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    });
+                    const data = await res.json();
+                    if (data.success && data.role === 'admin') { 
+                        setAuth(true); setError(''); 
+                    } else {
+                        setError('Contraseña incorrecta');
+                    }
+                } catch (err) {
+                    setError('Error de conexión');
+                }
             };
 
             const updateOrderStatus = async (id, status) => { await db.collection('orders').doc(id).update({ status }); };
@@ -526,9 +536,9 @@
 
                         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                             <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
-                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}}`}>Productos</button>
                             <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
-                            <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Mi Tienda</button>
+                            <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}}`}>Mi Tienda</button>
                         </div>
 
                         {tab === 'pedidos' && (
@@ -746,10 +756,23 @@
                 }
             }, [auth]);
 
-            const login = (e) => {
+            const login = async (e) => {
                 e.preventDefault();
-                if (pass === SUPERADMIN_PASSWORD) setAuth(true);
-                else alert("Contraseña incorrecta");
+                try {
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: pass })
+                    });
+                    const data = await res.json();
+                    if (data.success && data.role === 'superadmin') { 
+                        setAuth(true); 
+                    } else {
+                        alert("Contraseña incorrecta");
+                    }
+                } catch (err) {
+                    alert('Error de conexión');
+                }
             };
 
             const approvePayment = async (id) => {
