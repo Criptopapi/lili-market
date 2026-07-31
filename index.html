@@ -39,7 +39,8 @@
         const TELEGRAM_CHAT_ID = "-1004318541160";
         const ADMIN_PASSWORD = "lili2024";
         const SUPERADMIN_PASSWORD = "superadmin";
-        const SUPERADMIN_YAPE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SuperadminYape"; // Reemplaza por tu QR real
+        const SUPERADMIN_YAPE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SuperadminYape";
+        const ADMIN_YAPE_NUMBER = "999 888 777"; // <--- CAMBIA ESTO por el número real de Lili
 
         // --- UTILIDADES ---
         const compressImage = (file, callback) => {
@@ -153,6 +154,11 @@
             const handleReceiptFile = (e) => {
                 const file = e.target.files[0];
                 if(file) compressImage(file, (src) => setReceipt(src));
+            };
+
+            const copyYapeNumber = () => {
+                navigator.clipboard.writeText(ADMIN_YAPE_NUMBER.replace(/\s/g, ''));
+                alert("¡Número copiado! Ábrelo en tu app de Yape.");
             };
 
             const confirmOrder = async () => {
@@ -292,7 +298,11 @@
                                         <div className="mb-4">
                                             <label className="block text-xs font-bold text-slate-400 mb-1">1. Paga a este Yape</label>
                                             <div className="bg-slate-900 p-3 rounded-xl flex flex-col items-center border border-slate-700">
-                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=LiliYape123" alt="QR Yape" className="w-24 h-24 mb-1 rounded" />
+                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=LiliYape123" alt="QR Yape" className="w-24 h-24 mb-2 rounded" />
+                                                <p className="text-xs text-slate-400 mb-1">Toca para copiar el número:</p>
+                                                <button onClick={copyYapeNumber} className="bg-slate-700 text-green-400 text-sm font-bold px-3 py-2 rounded-lg hover:bg-slate-600 w-full flex items-center justify-center gap-2">
+                                                    <span>{ADMIN_YAPE_NUMBER}</span> 📋
+                                                </button>
                                             </div>
                                         </div>
                                         <div className="mb-4">
@@ -423,7 +433,6 @@
                 );
             }
 
-            // Filtrar pedidos anulados para los cálculos financieros
             const validOrders = orders.filter(o => o.status !== "Anulado");
             const cycleOrders = validOrders.filter(o => o.createdAt >= billingCycle);
             const totalSalesCycle = cycleOrders.filter(o => o.status === "Entregado").reduce((sum, o) => sum + o.total, 0);
@@ -457,7 +466,7 @@
 
                         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                             <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
-                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}}`}>Productos</button>
                             <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
                         </div>
 
