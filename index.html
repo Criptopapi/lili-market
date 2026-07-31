@@ -39,8 +39,6 @@
         const TELEGRAM_CHAT_ID = "-1004318541160";
         const ADMIN_PASSWORD = "lili2024";
         const SUPERADMIN_PASSWORD = "superadmin";
-        const SUPERADMIN_YAPE_QR = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=SuperadminYape";
-        const ADMIN_YAPE_NUMBER = "999 888 777"; // <--- CAMBIA ESTO por el número real de Lili
 
         // --- UTILIDADES ---
         const compressImage = (file, callback) => {
@@ -78,6 +76,8 @@
             const [route, setRoute] = useState(window.location.hash);
             const [products, setProducts] = useState([]);
             const [billingCycle, setBillingCycle] = useState(Date.now());
+            const [clientConfig, setClientConfig] = useState({ yapeNumber: '', yapeQR: '' });
+            const [superadminConfig, setSuperadminConfig] = useState({ yapeNumber: '', yapeQR: '' });
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
@@ -90,6 +90,14 @@
 
                 db.collection('config').doc('billing').onSnapshot(doc => {
                     if (doc.exists) setBillingCycle(doc.data().cycleStartDate);
+                });
+
+                db.collection('config').doc('client_payment').onSnapshot(doc => {
+                    if (doc.exists) setClientConfig(doc.data());
+                });
+
+                db.collection('config').doc('superadmin_payment').onSnapshot(doc => {
+                    if (doc.exists) setSuperadminConfig(doc.data());
                 });
 
                 db.collection('products').get().then(snapshot => {
@@ -116,14 +124,14 @@
 
             if (loading) return <div className="min-h-screen flex items-center justify-center text-green-400 font-display">CARGANDO MÁQUINA...</div>;
 
-            if (route === '#superadmin') return <SuperAdminApp onBackClick={goClient} billingCycle={billingCycle} />;
-            if (route === '#admin') return <AdminApp onBackClick={goClient} products={products} billingCycle={billingCycle} />;
+            if (route === '#superadmin') return <SuperAdminApp onBackClick={goClient} billingCycle={billingCycle} superadminConfig={superadminConfig} />;
+            if (route === '#admin') return <AdminApp onBackClick={goClient} products={products} billingCycle={billingCycle} clientConfig={clientConfig} superadminConfig={superadminConfig} />;
             
-            return <ClientApp onAdminClick={goAdmin} products={products} />;
+            return <ClientApp onAdminClick={goAdmin} products={products} clientConfig={clientConfig} />;
         }
 
         // --- VISTA DEL CLIENTE ---
-        function ClientApp({ onAdminClick, products }) {
+        function ClientApp({ onAdminClick, products, clientConfig }) {
             const [cart, setCart] = useState([]);
             const [view, setView] = useState('home');
             const [clientName, setClientName] = useState('');
@@ -157,8 +165,10 @@
             };
 
             const copyYapeNumber = () => {
-                navigator.clipboard.writeText(ADMIN_YAPE_NUMBER.replace(/\s/g, ''));
-                alert("¡Número copiado! Ábrelo en tu app de Yape.");
+                if(clientConfig.yapeNumber) {
+                    navigator.clipboard.writeText(clientConfig.yapeNumber.replace(/\s/g, ''));
+                    alert("¡Número copiado! Ábrelo en tu app de Yape.");
+                }
             };
 
             const confirmOrder = async () => {
@@ -298,11 +308,19 @@
                                         <div className="mb-4">
                                             <label className="block text-xs font-bold text-slate-400 mb-1">1. Paga a este Yape</label>
                                             <div className="bg-slate-900 p-3 rounded-xl flex flex-col items-center border border-slate-700">
-                                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=LiliYape123" alt="QR Yape" className="w-24 h-24 mb-2 rounded" />
-                                                <p className="text-xs text-slate-400 mb-1">Toca para copiar el número:</p>
-                                                <button onClick={copyYapeNumber} className="bg-slate-700 text-green-400 text-sm font-bold px-3 py-2 rounded-lg hover:bg-slate-600 w-full flex items-center justify-center gap-2">
-                                                    <span>{ADMIN_YAPE_NUMBER}</span> 📋
-                                                </button>
+                                                {clientConfig.yapeQR ? (
+                                                    <img src={clientConfig.yapeQR} alt="QR Yape" className="w-32 h-32 mb-2 rounded object-cover" />
+                                                ) : (
+                                                    <p className="text-slate-500 text-xs my-4">El vendedor no ha configurado su QR.</p>
+                                                )}
+                                                {clientConfig.yapeNumber && (
+                                                    <>
+                                                        <p className="text-xs text-slate-400 mb-1">Toca para copiar el número:</p>
+                                                        <button onClick={copyYapeNumber} className="bg-slate-700 text-green-400 text-sm font-bold px-3 py-2 rounded-lg hover:bg-slate-600 w-full flex items-center justify-center gap-2">
+                                                            <span>{clientConfig.yapeNumber}</span> 📋
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="mb-4">
@@ -341,7 +359,7 @@
         }
 
         // --- VISTA ADMIN (LILI) ---
-        function AdminApp({ onBackClick, products, billingCycle }) {
+        function AdminApp({ onBackClick, products, billingCycle, clientConfig, superadminConfig }) {
             const [orders, setOrders] = useState([]);
             const [payments, setPayments] = useState([]);
             const [tab, setTab] = useState('pedidos');
@@ -354,6 +372,15 @@
             const [commReceipt, setCommReceipt] = useState(null);
             const [commRef, setCommRef] = useState('');
             const [commError, setCommError] = useState('');
+
+            // Estado para configuración de tienda
+            const [editYapeNumber, setEditYapeNumber] = useState(clientConfig.yapeNumber || '');
+            const [editYapeQR, setEditYapeQR] = useState(clientConfig.yapeQR || null);
+
+            useEffect(() => {
+                setEditYapeNumber(clientConfig.yapeNumber || '');
+                setEditYapeQR(clientConfig.yapeQR || null);
+            }, [clientConfig]);
 
             useEffect(() => {
                 if (auth) {
@@ -400,6 +427,22 @@
                     setCommReceipt(null); setCommRef(''); setCommError('');
                     alert("Comprobante enviado al administrador de la plataforma.");
                 } catch(err) { console.error(err); setCommError("Error al subir."); }
+            };
+
+            const handleClientQRFile = (e) => {
+                const file = e.target.files[0];
+                if (file) compressImage(file, (src) => setEditYapeQR(src));
+            };
+
+            const saveClientConfig = async (e) => {
+                e.preventDefault();
+                try {
+                    await db.collection('config').doc('client_payment').set({
+                        yapeNumber: editYapeNumber,
+                        yapeQR: editYapeQR
+                    });
+                    alert("Configuración de pago guardada.");
+                } catch (err) { console.error(err); alert("Error al guardar."); }
             };
 
             const downloadCSV = () => {
@@ -466,8 +509,9 @@
 
                         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                             <button onClick={() => setTab('pedidos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pedidos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pedidos</button>
-                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}}`}>Productos</button>
+                            <button onClick={() => setTab('productos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'productos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Productos</button>
                             <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'pagos' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Pagos Plataforma</button>
+                            <button onClick={() => setTab('tienda')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${tab === 'tienda' ? 'bg-green-500 text-slate-900' : 'bg-slate-800 text-slate-400'}`}>Mi Tienda</button>
                         </div>
 
                         {tab === 'pedidos' && (
@@ -568,8 +612,13 @@
                                     <h3 className="text-lg font-bold text-white mb-4">Pagar Comisión de Plataforma</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="flex flex-col items-center justify-center bg-slate-900 p-4 rounded-lg">
-                                            <img src={SUPERADMIN_YAPE_QR} alt="QR Superadmin" className="w-32 h-32 mb-2 rounded" />
-                                            <p className="text-sm text-slate-400 text-center">Escanea y paga la comisión del ciclo actual (S/ {yourCommission.toFixed(2)})</p>
+                                            {superadminConfig.yapeQR ? (
+                                                <img src={superadminConfig.yapeQR} alt="QR Superadmin" className="w-32 h-32 mb-2 rounded object-cover" />
+                                            ) : (
+                                                <p className="text-slate-500 text-sm my-4">El administrador no ha configurado su QR.</p>
+                                            )}
+                                            <p className="text-sm text-slate-400 text-center">Paga la comisión del ciclo actual (S/ {yourCommission.toFixed(2)})</p>
+                                            {superadminConfig.yapeNumber && <p className="text-green-400 font-bold mt-1">{superadminConfig.yapeNumber}</p>}
                                         </div>
                                         <form onSubmit={submitPayment} className="flex flex-col gap-2">
                                             <div>
@@ -606,13 +655,35 @@
                                 </div>
                             </div>
                         )}
+
+                        {tab === 'tienda' && (
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                <h3 className="text-lg font-bold text-white mb-4">Configuración de Cobro</h3>
+                                <form onSubmit={saveClientConfig} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex flex-col items-center justify-center bg-slate-900 p-4 rounded-lg">
+                                        <img src={editYapeQR || "https://via.placeholder.com/150"} alt="QR Actual" className="w-32 h-32 mb-2 rounded object-cover" />
+                                        <label className="text-[10px] text-green-400 cursor-pointer hover:underline mt-1">
+                                            Cambiar QR de Yape
+                                            <input type="file" accept="image/*" onChange={handleClientQRFile} className="hidden" />
+                                        </label>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-400 block mb-1">Número de Yape</label>
+                                            <input type="text" value={editYapeNumber} onChange={(e) => setEditYapeNumber(e.target.value)} placeholder="Ej: 999 888 777" className="w-full p-2 rounded-lg border border-slate-700 bg-slate-900 text-white text-sm" />
+                                        </div>
+                                        <button type="submit" className="bg-green-500 text-slate-900 py-2 rounded-lg font-bold mt-2">Guardar Cambios</button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
         }
 
         // --- VISTA SUPERADMIN (TÚ) ---
-        function SuperAdminApp({ onBackClick, billingCycle }) {
+        function SuperAdminApp({ onBackClick, billingCycle, superadminConfig }) {
             const [auth, setAuth] = useState(false);
             const [pass, setPass] = useState('');
             const [orders, setOrders] = useState([]);
@@ -620,6 +691,15 @@
             const [tab, setTab] = useState('dashboard');
             const [modalReceipt, setModalReceipt] = useState(null);
             const [searchTerm, setSearchTerm] = useState('');
+
+            // Estado para configuración de cobro del superadmin
+            const [editYapeNumber, setEditYapeNumber] = useState(superadminConfig.yapeNumber || '');
+            const [editYapeQR, setEditYapeQR] = useState(superadminConfig.yapeQR || null);
+
+            useEffect(() => {
+                setEditYapeNumber(superadminConfig.yapeNumber || '');
+                setEditYapeQR(superadminConfig.yapeQR || null);
+            }, [superadminConfig]);
 
             useEffect(() => {
                 if (auth) {
@@ -674,6 +754,22 @@
                 }
             };
 
+            const handleSuperadminQRFile = (e) => {
+                const file = e.target.files[0];
+                if (file) compressImage(file, (src) => setEditYapeQR(src));
+            };
+
+            const saveSuperadminConfig = async (e) => {
+                e.preventDefault();
+                try {
+                    await db.collection('config').doc('superadmin_payment').set({
+                        yapeNumber: editYapeNumber,
+                        yapeQR: editYapeQR
+                    });
+                    alert("Tu configuración de cobro guardada.");
+                } catch (err) { console.error(err); alert("Error al guardar."); }
+            };
+
             if (!auth) {
                 return (
                     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
@@ -724,6 +820,7 @@
                         <div className="flex gap-2 mb-6">
                             <button onClick={() => setTab('dashboard')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'dashboard' ? 'bg-red-500 text-white' : 'bg-slate-900 text-slate-400'}`}>Resumen</button>
                             <button onClick={() => setTab('pagos')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'pagos' ? 'bg-red-500 text-white' : 'bg-slate-900 text-slate-400'}`}>Aprobación de Pagos</button>
+                            <button onClick={() => setTab('config')} className={`px-4 py-2 rounded-lg text-sm font-bold ${tab === 'config' ? 'bg-red-500 text-white' : 'bg-slate-900 text-slate-400'}`}>Config. Pagos</button>
                         </div>
 
                         {tab === 'dashboard' && (
@@ -808,6 +905,28 @@
                                         ))
                                     )}
                                 </div>
+                            </div>
+                        )}
+
+                        {tab === 'config' && (
+                            <div className="bg-slate-900 p-4 rounded-xl border border-red-500/30">
+                                <h3 className="text-lg font-bold text-white mb-4">Mi Configuración de Cobro (Comisiones)</h3>
+                                <form onSubmit={saveSuperadminConfig} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex flex-col items-center justify-center bg-slate-950 p-4 rounded-lg">
+                                        <img src={editYapeQR || "https://via.placeholder.com/150"} alt="QR Actual" className="w-32 h-32 mb-2 rounded object-cover" />
+                                        <label className="text-[10px] text-red-400 cursor-pointer hover:underline mt-1">
+                                            Cambiar mi QR de Yape
+                                            <input type="file" accept="image/*" onChange={handleSuperadminQRFile} className="hidden" />
+                                        </label>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-400 block mb-1">Mi Número de Yape</label>
+                                            <input type="text" value={editYapeNumber} onChange={(e) => setEditYapeNumber(e.target.value)} placeholder="Ej: 999 111 222" className="w-full p-2 rounded-lg border border-slate-800 bg-slate-950 text-white text-sm" />
+                                        </div>
+                                        <button type="submit" className="bg-red-500 text-white py-2 rounded-lg font-bold mt-2">Guardar Mi Configuración</button>
+                                    </div>
+                                </form>
                             </div>
                         )}
                     </div>
