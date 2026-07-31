@@ -538,9 +538,9 @@
                                         <p className="text-slate-400 text-xs">Ventas Históricas (Entregadas)</p>
                                         <p className="text-xl font-bold text-white">S/ {totalSalesAllTime.toFixed(2)}</p>
                                     </div>
-                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                        <p className="text-slate-400 text-xs">Comisión Generada (5%)</p>
-                                        <p className="text-xl font-bold text-green-400">S/ {totalCommissionAllTime.toFixed(2)}</p>
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-red-500/30">
+                                        <p className="text-slate-400 text-xs">Comisión Pendiente Actual</p>
+                                        <p className="text-xl font-bold text-red-400">S/ {currentDebt.toFixed(2)}</p>
                                     </div>
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-center">
                                         <button onClick={downloadCSV} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold w-full">📄 Descargar Excel (CSV)</button>
@@ -626,14 +626,10 @@
 
                         {tab === 'pagos' && (
                             <div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                <div className="grid grid-cols-1 gap-3 mb-6">
                                     <div className="bg-slate-800 p-4 rounded-xl border border-red-500/30">
-                                        <p className="text-slate-400 text-xs">Deuda Actual con Plataforma</p>
-                                        <p className="text-xl font-bold text-red-400">S/ {currentDebt.toFixed(2)}</p>
-                                    </div>
-                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                        <p className="text-slate-400 text-xs">Total Pagado (Aprobado)</p>
-                                        <p className="text-xl font-bold text-green-400">S/ {totalPaid.toFixed(2)}</p>
+                                        <p className="text-slate-400 text-xs">Deuda Actual con Plataforma (Pendiente de Pago)</p>
+                                        <p className="text-2xl font-bold text-red-400">S/ {currentDebt.toFixed(2)}</p>
                                     </div>
                                 </div>
 
